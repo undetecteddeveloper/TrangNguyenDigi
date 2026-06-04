@@ -1,0 +1,23 @@
+# Next.js
+SOURCE/.next/
+SOURCE/node_modules/
+SOURCE/out/
+SOURCE/build/
+
+# Env
+SOURCE/.env
+SOURCE/.env.local
+SOURCE/.env*.local
+
+# TypeScript build info
+SOURCE/*.tsbuildinfo
+SOURCE/next-env.d.ts
+
+# Misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# Screenshots tạm
+TEMP_SCREENSHOT/*
+!TEMP_SCREENSHOT/.gitkeep
