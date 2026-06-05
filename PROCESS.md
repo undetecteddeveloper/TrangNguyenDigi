@@ -44,7 +44,7 @@
 
 ```
 GĐ 0 — Nền Móng              : [x] Done
-GĐ 1 — Functional Prototype  : [~] In Progress (M1.1–M1.4 Done)
+GĐ 1 — Functional Prototype  : [x] Done (M1.1–M1.7) — đạt đủ tiêu chí thoát
 GĐ 2 — Connected Prototype   : [ ] Not Started
 GĐ 3 — Polish (MVP ship)     : [ ] Not Started
 ─────────────────────────────
@@ -55,11 +55,11 @@ Post-MVP B — Layer 4         : [ ] Not Started
 ---
 ---
 
-# [Layer 2: Core Loop] — Task: GĐ 1 Functional Prototype (M1.1–M1.4)
+# [Layer 2: Core Loop] — Task: GĐ 1 Functional Prototype (M1.1–M1.7)
 
-- **Latest prompt:** "Bắt đầu thực hiện các milestone từ 1.1-1.4 trước tiên... xây khung xương."
+- **Latest prompt:** "Bắt đầu với các milestone còn lại của GĐ1" (M1.5–M1.7), tiếp nối M1.1–M1.4.
 - **Latest step:** Git
-- **Layer status:** Layer 2 In Progress (Dở dang — có logic + UI structure, chưa style/DB/scoring)
+- **Layer status:** Layer 2 Dở dang (GĐ 1 logic + structure Done; chưa style/DB/auth)
 
 ### Quyết định C&D (engineer chốt)
 - Q1=B: `/exams` → `/exams/[id]` (Detail) → "Bắt đầu" → Player.
@@ -87,12 +87,44 @@ Post-MVP B — Layer 4         : [ ] Not Started
 
 ---
 
-## Ghi chú scope & nợ kỹ thuật (cho batch sau)
-- Player dùng `useState` cho `current` + `answers`. **M1.5** sẽ nâng lên `useReducer` (examPlayerStore) — prop interface của component không đổi.
-- Nút "Nộp bài" hiện disabled placeholder. **M1.6** thêm `lib/scoring/computeScore.ts` (pure, testable). **M1.7** thêm `ResultView`.
-- Tất cả `_components` mới đặt theo `UI-LAYER-MAP.md` Mục 4.5 — GĐ 3 (M3.1) chỉ thêm style, không viết lại.
+---
+
+## Logic Module: Scoring (M1.6 — ⭐ tracer code)
+- **State:** Done
+  + M1.6 `types/result.ts` (ScoreResult, PerQuestionResult, TopicResult) — Done
+  + M1.6 `lib/scoring/computeScore.ts` — hàm THUẦN `(questions, answers) → ScoreResult`, thang 10, topicBreakdown — Done
+  + M1.6 Verify tay 8/8 case (đúng hết→10, sai hết→0, partial 3/5→6, bỏ trống, breakdown) qua `npx tsx` one-shot — Done
+
+## Logic Module: Exam Player State (M1.5)
+- **State:** Done
+  + M1.5 `hooks/useExamPlayer.ts` — useReducer (current + answers), actions SELECT_ANSWER/GOTO/NEXT/PREV — Done
+  + M1.5 Player refactor dùng hook (thay useState placeholder) — Done
+
+## UI Module: Result + Submit (M1.7)
+- **State:** Done
+  + M1.7 `_components/ScoreCard.tsx` (điểm tổng) + `TopicBreakdown.tsx` (theo chủ đề) — Done
+  + M1.7 `exams/[id]/attempt/[attemptId]/result/page.tsx` (ResultView) — chi tiết từng câu + "Làm lại" — Done
+  + M1.7 Nút "Nộp bài" thật: sessionStorage bridge (Q=A) → điều hướng Result — Done
+
+---
+
+## Ghi chú scope & nợ kỹ thuật (cho GĐ 2)
+- Bridge Player→Result qua `sessionStorage` key `attempt:<attemptId>`. **GĐ 2 (M2.6)** thay bằng `submitExam()` Server Action + `getResult(attemptId)` từ DB — route không đổi.
+- `attemptId` sinh client-side (`crypto.randomUUID`). **GĐ 2** thay bằng UUID do `startAttempt()` tạo.
+- `getFakeExams/getFakeExam/getFakeQuestions` → **GĐ 2 (M2.5)** thay bằng query Supabase.
+- `computeScore` giữ nguyên, **GĐ 2** chạy server-side trong `submitExam()`.
+- Tất cả `_components` theo `UI-LAYER-MAP.md` Mục 4.5 — GĐ 3 (M3.1) chỉ thêm style.
 
 ## Kết quả Testing
 - `tsc --noEmit`: pass (exit 0).
-- `next build`: pass — routes `/exams`, `/exams/[id]`, `/exams/[id]/attempt/[attemptId]` build đúng.
-- Visual testing: bỏ qua (GĐ 1 chưa làm — theo WORKFLOW Bước 4, chỉ từ GĐ 2+).
+- `next build`: pass — 6 routes gồm `/exams/[id]/attempt/[attemptId]/result`.
+- `computeScore` verify tay: **8/8 pass** (Pha 0, không cài framework — script tạm đã xóa).
+- Visual testing: bỏ qua (Pha 0 thủ công; render server-side xác nhận qua build).
+
+## ✅ Tiêu chí thoát GĐ 1 (PROJECT_ROADMAP Mục 5)
+- [x] Chọn được 1 trong 2 đề mẫu.
+- [x] Trả lời hết câu, nộp bài.
+- [x] Điểm hiển thị chính xác (verify tay 8/8).
+- [x] Toàn bộ in-memory, không cần internet.
+
+> **Layer 2 status:** Dở dang (logic + structure xong; chưa style/DB/auth — đúng tinh thần prototype-first).

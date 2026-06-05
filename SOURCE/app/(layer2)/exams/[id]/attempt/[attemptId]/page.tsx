@@ -1,29 +1,30 @@
 // Exam Player — /exams/[id]/attempt/[attemptId] (Layer 2).
-// GĐ 1, M1.4: render câu hỏi + điều hướng next/prev (Q3=A: một câu/trang).
+// GĐ 1: render câu hỏi (một câu/trang), bắt đáp án (M1.5), nộp bài (M1.6/M1.7).
 //
-// State hiện tại dùng useState (currentIndex + answers) — đủ cho M1.4.
-// M1.5 sẽ nâng lên useReducer (examPlayerStore) khi logic state phức tạp hơn.
-// M1.6 thêm computeScore + nút "Nộp bài"; M1.7 thêm ResultView.
+// State qua useExamPlayer (useReducer — M1.5).
+// Nộp bài: lưu answers vào sessionStorage rồi điều hướng sang Result page.
+// GĐ 2 (M2.6) thay bridge này bằng submitExam() Server Action + DB.
 
 "use client";
 
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { getFakeExam, getFakeQuestions } from "@/lib/fake-data/exams";
 import { QuestionRenderer } from "@/app/(layer2)/_components/QuestionRenderer";
 import { QuestionPagination } from "@/app/(layer2)/_components/QuestionPagination";
-import type { ChoiceId } from "@/types/question";
+import { useExamPlayer } from "@/hooks/useExamPlayer";
 
 export default function ExamPlayerPage() {
   const params = useParams<{ id: string; attemptId: string }>();
+  const router = useRouter();
   const examId = params.id;
+  const attemptId = params.attemptId;
 
   const exam = getFakeExam(examId);
   const questions = getFakeQuestions(examId);
 
-  // answers: map questionId -> đáp án đã chọn (M1.5 sẽ chuyển sang useReducer).
-  const [answers, setAnswers] = useState<Record<string, ChoiceId>>({});
-  const [current, setCurrent] = useState(0);
+  const { current, answers, selectAnswer, goto, next, prev } = useExamPlayer(
+    questions.length,
+  );
 
   if (!exam || questions.length === 0) {
     return (
@@ -38,12 +39,16 @@ export default function ExamPlayerPage() {
   const answeredIndices = questions
     .map((q, i) => (answers[q.id] ? i : -1))
     .filter((i) => i >= 0);
+  const remaining = questions.length - answeredIndices.length;
 
-  function selectAnswer(choice: ChoiceId) {
-    setAnswers((prev) => ({ ...prev, [question.id]: choice }));
+  function submit() {
+    // Bridge GĐ 1 (Q=A): lưu bài làm để Result page chấm điểm.
+    sessionStorage.setItem(
+      `attempt:${attemptId}`,
+      JSON.stringify({ examId, answers }),
+    );
+    router.push(`/exams/${examId}/attempt/${attemptId}/result`);
   }
-
-  const isLast = current === questions.length - 1;
 
   return (
     <main>
@@ -54,24 +59,22 @@ export default function ExamPlayerPage() {
         total={questions.length}
         question={question}
         selectedAnswer={answers[question.id]}
-        onSelectAnswer={selectAnswer}
+        onSelectAnswer={(choice) => selectAnswer(question.id, choice)}
       />
 
       <QuestionPagination
         current={current}
         total={questions.length}
         answeredIndices={answeredIndices}
-        onJump={setCurrent}
-        onPrev={() => setCurrent((c) => Math.max(0, c - 1))}
-        onNext={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
+        onJump={goto}
+        onPrev={prev}
+        onNext={next}
       />
 
-      {/* Nộp bài: logic chấm điểm (computeScore) thuộc M1.6, kết quả M1.7. */}
-      {isLast && (
-        <button type="button" disabled title="Chấm điểm sẽ thêm ở M1.6">
-          Nộp bài (sắp có — M1.6)
-        </button>
-      )}
+      {remaining > 0 && <p>Còn {remaining} câu chưa làm.</p>}
+      <button type="button" onClick={submit}>
+        Nộp bài
+      </button>
     </main>
   );
 }
