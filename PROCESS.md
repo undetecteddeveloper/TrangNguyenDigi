@@ -158,13 +158,13 @@ Post-MVP B — Layer 4         : [ ] Not Started
 ## Logic Module: Database Schema + RLS (M2.2)
 - **State:** Done (code) — ⚠️ chờ engineer apply lên DB
   + M2.2 `supabase/schema.sql` — 6 bảng + RLS + trigger `handle_new_user` (auto tạo user_profiles). Idempotent. — Done
-  + M2.2 **Engineer chạy `supabase/schema.sql` trong Supabase SQL Editor** — ⚠️ Chờ (agent không có DB password/management token để chạy DDL)
+  + M2.2 **Engineer chạy `supabase/schema.sql` trong Supabase SQL Editor** — Done
 
 ## Logic Module: Seed Data (M2.3)
 - **State:** Done (code) — ⚠️ chờ chạy sau khi M2.2 apply
   + M2.3 `supabase/seed.ts` — đẩy 2 đề + 10 câu từ fake-data vào DB (service_role, upsert, tự nạp `.env.local`) — Done
-  + M2.3 Chạy `npx tsx supabase/seed.ts` — ⚠️ Chờ (đã thử, báo `Could not find table 'public.questions'` vì schema chưa apply)
-  + M2.3 Verify data trong Supabase dashboard — ⚠️ Chờ
+  + M2.3 Chạy `npx tsx supabase/seed.ts` — Done (10 câu hỏi + 2 đề ✅)
+  + M2.3 Verify data trong Supabase dashboard — Done (seed log xác nhận)
 
 ## Logic Module + UI Module: Auth thật (M2.4 — Logic Layer 1)
 - **State:** Done
@@ -187,17 +187,12 @@ Post-MVP B — Layer 4         : [ ] Not Started
 ## Kết quả Testing
 - `tsc --noEmit`: pass (exit 0).
 - `next build`: pass — 7 routes, thêm `/login`; `Proxy (Middleware)` được nhận diện.
-- Seed live-DB: **chưa chạy được** — chờ engineer apply `schema.sql` (xem ⚠️ ở M2.2). Không phải lỗi code.
+- Seed live-DB: **pass** — 10 câu hỏi + 2 đề đã vào DB (2026-06-06).
 - Visual testing: bỏ qua so sánh — engineer chưa cung cấp reference image (đúng quy định WORKFLOW Bước 4).
-
-## ⏭️ Việc engineer cần làm để hoàn tất M2.2–M2.3
-1. Supabase Dashboard → SQL Editor → paste toàn bộ `SOURCE/supabase/schema.sql` → Run.
-2. (Khuyến nghị prototype) Authentication → Providers → Email: **tắt "Confirm email"** để signUp đăng nhập được ngay.
-3. Báo agent → agent chạy `npx tsx supabase/seed.ts` và verify dashboard.
 
 > Lưu ý quy trình: Đọc sơ qua các md file có trong dự án để có đủ context.
 
 ---
 
-*Issue (nếu có):* `Could not find the table 'public.questions' in the schema cache` khi chạy seed.
-*Fixing process:* Không phải bug code — bảng chưa tồn tại vì `schema.sql` chưa được apply lên Supabase. Agent không có DB password/management token để chạy DDL từ xa → cần engineer paste schema.sql vào SQL Editor (bước ⏭️ ở trên), sau đó agent chạy lại seed.
+*Issue (nếu có):* —
+*Fixing process:* —
