@@ -1,8 +1,8 @@
 // Exam Detail — /exams/[id] (Layer 2).
-// Server Component: xem thông tin đề trước khi bắt đầu (GĐ 1, M1.3 / Q1=B).
+// Server Component: xem thông tin đề trước khi bắt đầu (GĐ 2 M2.5, thay fake-data).
 
 import { notFound } from "next/navigation";
-import { getFakeExam } from "@/lib/fake-data/exams";
+import { getExam } from "@/app/(layer2)/queries";
 import { StartAttemptButton } from "@/app/(layer2)/_components/StartAttemptButton";
 
 export default async function ExamDetailPage({
@@ -11,7 +11,7 @@ export default async function ExamDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const exam = getFakeExam(id);
+  const exam = await getExam(id);
 
   if (!exam) {
     notFound();

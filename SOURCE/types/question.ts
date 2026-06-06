@@ -25,3 +25,10 @@ export interface Question {
    */
   topic: string;
 }
+
+/**
+ * Câu hỏi gửi xuống client player — KHÔNG có `correctAnswer` (GĐ 2 M2.6).
+ * Ranh giới bảo mật: đáp án đúng chỉ tồn tại server-side; `computeScore` chấm
+ * trong `submitExam()` với `Question` đầy đủ lấy từ DB.
+ */
+export type PublicQuestion = Omit<Question, "correctAnswer">;

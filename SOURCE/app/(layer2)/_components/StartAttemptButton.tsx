@@ -1,22 +1,15 @@
 // StartAttemptButton — nút "Bắt đầu làm bài" trên màn Exam Detail (Layer 2).
-// GĐ 1: sinh attemptId client-side bằng crypto.randomUUID() (xem M1.3, Q2=A).
-// GĐ 2: attemptId sẽ do startAttempt() Server Action tạo từ DB (M2.6).
+// GĐ 2 (M2.6): startAttempt() Server Action tạo attempt trong DB rồi redirect.
+// (Trước đây GĐ 1 sinh attemptId client-side bằng crypto.randomUUID.)
 
-"use client";
-
-import { useRouter } from "next/navigation";
+import { startAttempt } from "@/app/(layer2)/actions";
 
 export function StartAttemptButton({ examId }: { examId: string }) {
-  const router = useRouter();
-
-  function start() {
-    const attemptId = crypto.randomUUID();
-    router.push(`/exams/${examId}/attempt/${attemptId}`);
-  }
+  const start = startAttempt.bind(null, examId);
 
   return (
-    <button type="button" onClick={start}>
-      Bắt đầu làm bài
-    </button>
+    <form action={start}>
+      <button type="submit">Bắt đầu làm bài</button>
+    </form>
   );
 }

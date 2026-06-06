@@ -1,71 +1,31 @@
-// Result — /exams/[id]/attempt/[attemptId]/result (Layer 2). M1.7.
-// ResultView: đọc bài làm từ sessionStorage (bridge GĐ 1, Q=A), chấm điểm
-// bằng computeScore, hiển thị điểm + breakdown + chi tiết từng câu.
-// GĐ 2 (M2.6) thay sessionStorage bằng getResult(attemptId) từ DB.
+// Result — /exams/[id]/attempt/[attemptId]/result (Layer 2). M2.6.
+// Server Component (GĐ 2): đọc kết quả đã chấm + lưu trong DB qua getResult().
+// Attempt chưa nộp / không tồn tại / không thuộc user → redirect về trang đề (Q2=A).
+// (Trước đây GĐ 1 đọc sessionStorage + chấm điểm client-side.)
 
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { getFakeExam, getFakeQuestions } from "@/lib/fake-data/exams";
-import { computeScore } from "@/lib/scoring/computeScore";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getResult } from "@/app/(layer2)/queries";
 import { ScoreCard } from "@/app/(layer2)/_components/ScoreCard";
 import { TopicBreakdown } from "@/app/(layer2)/_components/TopicBreakdown";
-import type { ChoiceId, Question } from "@/types/question";
-import type { ScoreResult } from "@/types/result";
 
-interface StoredAttempt {
-  examId: string;
-  answers: Record<string, ChoiceId>;
-}
+export default async function ResultPage({
+  params,
+}: {
+  params: Promise<{ id: string; attemptId: string }>;
+}) {
+  const { id, attemptId } = await params;
+  const data = await getResult(attemptId);
 
-export default function ResultPage() {
-  const params = useParams<{ id: string; attemptId: string }>();
-  const router = useRouter();
-  const examId = params.id;
-  const attemptId = params.attemptId;
-
-  const [result, setResult] = useState<ScoreResult | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [missing, setMissing] = useState(false);
-
-  useEffect(() => {
-    const raw = sessionStorage.getItem(`attempt:${attemptId}`);
-    if (!raw) {
-      setMissing(true);
-      return;
-    }
-    const stored: StoredAttempt = JSON.parse(raw);
-    const qs = getFakeQuestions(stored.examId);
-    setQuestions(qs);
-    setResult(computeScore(qs, stored.answers));
-  }, [attemptId]);
-
-  if (missing) {
-    return (
-      <main>
-        <p>Không có dữ liệu bài làm. Vui lòng làm lại.</p>
-        <button type="button" onClick={() => router.push(`/exams/${examId}`)}>
-          Về trang đề
-        </button>
-      </main>
-    );
+  if (!data) {
+    redirect(`/exams/${id}`);
   }
 
-  if (!result) {
-    return (
-      <main>
-        <p>Đang chấm điểm…</p>
-      </main>
-    );
-  }
-
-  const exam = getFakeExam(examId);
-  const questionById = new Map(questions.map((q) => [q.id, q]));
+  const { examTitle, result, questionContent } = data;
 
   return (
     <main>
-      <h1>Kết quả{exam ? `: ${exam.title}` : ""}</h1>
+      <h1>Kết quả: {examTitle}</h1>
 
       <ScoreCard result={result} />
       <TopicBreakdown topics={result.topicBreakdown} />
@@ -76,7 +36,7 @@ export default function ResultPage() {
           {result.perQuestion.map((r, i) => (
             <li key={r.questionId}>
               <p>
-                Câu {i + 1}: {questionById.get(r.questionId)?.content}
+                Câu {i + 1}: {questionContent[r.questionId]}
               </p>
               <p>
                 Bạn chọn: {r.selected ?? "(bỏ trống)"} · Đáp án đúng: {r.correct}{" "}
@@ -87,10 +47,8 @@ export default function ResultPage() {
         </ol>
       </section>
 
-      {/* "Làm lại" → màn Detail, nơi sinh attemptId mới (Q1=B). */}
-      <button type="button" onClick={() => router.push(`/exams/${examId}`)}>
-        Làm lại
-      </button>
+      {/* "Làm lại" → màn Detail, nơi tạo attempt mới (Q1=B). */}
+      <Link href={`/exams/${id}`}>Làm lại</Link>
     </main>
   );
 }

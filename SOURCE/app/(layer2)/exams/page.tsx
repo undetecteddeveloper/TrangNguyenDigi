@@ -1,11 +1,11 @@
 // Exam Browser — /exams (Layer 2).
-// Server Component: đọc fake data, render list đề (GĐ 1, M1.3).
+// Server Component: đọc đề từ Supabase (GĐ 2 M2.5, thay fake-data).
 
-import { getFakeExams } from "@/lib/fake-data/exams";
+import { listExams } from "@/app/(layer2)/queries";
 import { ExamBrowser } from "@/app/(layer2)/_components/ExamBrowser";
 
-export default function ExamsPage() {
-  const exams = getFakeExams();
+export default async function ExamsPage() {
+  const exams = await listExams();
 
   return (
     <main>

@@ -193,6 +193,65 @@ Post-MVP B — Layer 4         : [ ] Not Started
 > Lưu ý quy trình: Đọc sơ qua các md file có trong dự án để có đủ context.
 
 ---
+---
 
-*Issue (nếu có):* —
-*Fixing process:* —
+# [Layer 2: Core Loop] — Task: GĐ 2 Connected Prototype (M2.5–M2.7)
+
+- **Latest prompt:** "bắt đầu với các milestone còn lại của giai đoạn 2" (M2.5–M2.7). Engineer chốt Q1=A, Q2=A.
+- **Latest step:** Git
+- **Layer status:** Layer 2 Dở dang (wiring DB xong; chưa style)
+
+### Quyết định C&D (engineer chốt)
+- Q1=A: Giữ `lib/fake-data/` CHỈ làm nguồn cho `seed.ts`; gỡ mọi import trong app (app đọc 100% từ DB).
+- Q2=A: `getResult` gặp attempt chưa nộp / không tồn tại → `redirect('/exams/[id]')`.
+- Bảo mật: tạo `PublicQuestion = Omit<Question,'correctAnswer'>` cho client player; `correctAnswer` chỉ ở server; `computeScore` chạy server-side trong `submitExam`.
+- Bỏ `submitAnswer` per-câu (đúng Q2=A batch on submit). Không cài tool mới; visual testing bỏ qua ở GĐ2.
+
+---
+
+## Logic Module: L2 Reads — thay fake-data (M2.5)
+- **State:** Done
+  + M2.5 `types/question.ts` — thêm `PublicQuestion = Omit<Question,'correctAnswer'>` — Done
+  + M2.5 `app/(layer2)/queries.ts` (server-only) — `listExams()`, `getExam(id)`, `getExamForPlayer(id)` (PublicQuestion, không select correct_answer), `getResult(attemptId)` — Done
+  + M2.5 Sửa `exams/page.tsx` + `exams/[id]/page.tsx` → async dùng query — Done
+  + M2.5 Gỡ import fake-data khỏi app (chỉ `seed.ts` còn dùng) — Done
+
+## Logic Module: L2 Writes — Server Actions (M2.6)
+- **State:** Done
+  + M2.6 `app/(layer2)/actions.ts` — `startAttempt(examId)` (insert + redirect), `submitExam(attemptId, answers)` (batch upsert answers + computeScore server-side + insert results + khóa attempt + redirect; idempotent) — Done
+  + M2.6 `StartAttemptButton` → `<form action={startAttempt}>` (bỏ `crypto.randomUUID`) — Done
+  + M2.6 Tách player: `attempt/[attemptId]/page.tsx` (server fetch PublicQuestion) + `_components/ExamPlayer.tsx` (client, giữ `useExamPlayer`, submit qua `useTransition`) — Done
+  + M2.6 Result `page.tsx` → server component đọc `getResult` (bỏ sessionStorage + computeScore client); "Làm lại" = `<Link>` — Done
+  + M2.6 `QuestionRenderer` prop → `PublicQuestion` — Done
+
+## Logic Module: Test RLS (M2.7)
+- **State:** Done
+  + M2.7 `supabase/test-rls.ts` — 2 user (tạo qua Admin API, email_confirm=true), test bằng anon key + login thật — Done
+  + M2.7 Chạy `npx tsx supabase/test-rls.ts` — **6/6 PASS** — Done
+
+---
+
+## Files đã tạo/sửa (Updating M2.5–M2.7)
+- Tạo: `app/(layer2)/queries.ts`, `app/(layer2)/actions.ts`, `app/(layer2)/_components/ExamPlayer.tsx`, `supabase/test-rls.ts`
+- Sửa: `types/question.ts` (+PublicQuestion), `QuestionRenderer.tsx` (prop PublicQuestion), `StartAttemptButton.tsx` (form action), `exams/page.tsx`, `exams/[id]/page.tsx`, `attempt/[attemptId]/page.tsx` (server), `attempt/[attemptId]/result/page.tsx` (server)
+- Giữ nguyên: `lib/fake-data/exams.ts` (chỉ làm nguồn seed), `computeScore.ts` (tracer code, giờ chạy server-side), `useExamPlayer.ts`
+
+## Kết quả Testing (M2.5–M2.7)
+- `tsc --noEmit`: pass.
+- `next build`: pass — `/exams*` chuyển sang dynamic (ƒ) vì đọc DB qua cookie.
+- RLS test: **6/6 PASS** (A đọc của mình ✓, B bị chặn đọc/update attempt của A ✓, anon bị chặn questions/attempts ✓, auth đọc được questions ✓).
+- Visual testing: bỏ qua (chưa có reference image, UI cố tình chưa style — đúng WORKFLOW Bước 4).
+
+> Lưu ý quy trình: Đọc sơ qua các md file có trong dự án để có đủ context.
+
+## ✅ Tiêu chí thoát GĐ 2 (PROJECT_ROADMAP Mục 6)
+- [x] Test user đăng ký/đăng nhập được (auth M2.4 + RLS test tạo/login user).
+- [x] Làm đề lấy từ DB thật (listExams/getExam/getExamForPlayer).
+- [x] Attempt + điểm persist trong Supabase (startAttempt/submitExam → exam_attempts/attempt_answers/exam_results).
+- [x] RLS chặn đúng giữa 2 user (6/6 pass).
+- [ ] **Chờ engineer kiểm thử thủ công end-to-end trên browser** (đăng ký → làm đề → nộp → kết quả reload vẫn còn) để CONFIRM GĐ 2.
+
+---
+
+*Issue (nếu có):* (đã xử lý trong lúc test) signUp dính "Email invalid" với domain example.com/không-MX, rồi "email rate limit exceeded".
+*Fixing process:* Chuyển M2.7 sang tạo user bằng Admin API (`email_confirm=true`, không gửi mail) + login bằng anon key để test RLS. Pass 6/6.
