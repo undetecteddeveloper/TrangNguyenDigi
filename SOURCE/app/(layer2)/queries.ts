@@ -32,15 +32,41 @@ function toExam(row: ExamRow): Exam {
 
 // --- Reads ----------------------------------------------------------------
 
-/** Toàn bộ đề cho Exam Browser. */
-export async function listExams(): Promise<Exam[]> {
+export interface ExamFilters {
+  subject?: string;
+  grade?: number;
+}
+
+/** Đề cho Exam Browser, lọc tuỳ chọn theo môn/lớp (GĐ 3 M3.1). */
+export async function listExams(filters?: ExamFilters): Promise<Exam[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("exams")
     .select("id, title, question_ids, duration_minutes, subject, grade")
     .order("id");
+  if (filters?.subject) query = query.eq("subject", filters.subject);
+  if (filters?.grade !== undefined && !Number.isNaN(filters.grade)) {
+    query = query.eq("grade", filters.grade);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data as ExamRow[]).map(toExam);
+}
+
+/** Giá trị môn/lớp khả dụng để dựng bộ lọc (distinct, đã sort). */
+export async function listExamFacets(): Promise<{
+  subjects: string[];
+  grades: number[];
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("exams").select("subject, grade");
+  if (error) throw error;
+  const rows = data as { subject: string; grade: number }[];
+  const subjects = [...new Set(rows.map((r) => r.subject))].sort((a, b) =>
+    a.localeCompare(b, "vi"),
+  );
+  const grades = [...new Set(rows.map((r) => r.grade))].sort((a, b) => a - b);
+  return { subjects, grades };
 }
 
 /** Một đề theo id, hoặc null nếu không tồn tại. */
