@@ -1,6 +1,7 @@
-// QuestionPagination — điều hướng giữa các câu (Layer 2).
-// GĐ 1: nút prev/next + danh sách số câu, chưa style (M1.4).
-// GĐ 3: mobile chuyển sang swipe (xem UI-LAYER-MAP Mục 8.2).
+// QuestionPagination — điều hướng giữa các câu (Layer 2). GĐ 3 M3.1 Task 2.
+// Mỗi câu là một ô vuông: chưa làm = hairline mờ, đã làm = nền brand mờ,
+// đang xem = brand solid. Điều hướng chỉ qua các ô (nút prev/next đã bỏ — engineer).
+// (Swipe cho mobile — UI-LAYER-MAP 8.2 — xử lý ở task responsive sau.)
 
 interface QuestionPaginationProps {
   current: number; // index 0-based của câu đang xem
@@ -8,8 +9,6 @@ interface QuestionPaginationProps {
   /** Các index đã có đáp án — đánh dấu "đã làm". */
   answeredIndices: number[];
   onJump: (index: number) => void;
-  onPrev: () => void;
-  onNext: () => void;
 }
 
 export function QuestionPagination({
@@ -17,39 +16,36 @@ export function QuestionPagination({
   total,
   answeredIndices,
   onJump,
-  onPrev,
-  onNext,
 }: QuestionPaginationProps) {
   const answered = new Set(answeredIndices);
 
   return (
     <nav>
-      <button type="button" onClick={onPrev} disabled={current === 0}>
-        ← Câu trước
-      </button>
-
-      <ol>
-        {Array.from({ length: total }, (_, i) => (
-          <li key={i}>
-            <button
-              type="button"
-              onClick={() => onJump(i)}
-              aria-current={i === current ? "true" : undefined}
-            >
-              {i + 1}
-              {answered.has(i) ? " ✓" : ""}
-            </button>
-          </li>
-        ))}
+      <ol className="flex flex-wrap gap-2">
+        {Array.from({ length: total }, (_, i) => {
+          const isCurrent = i === current;
+          const isAnswered = answered.has(i);
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => onJump(i)}
+                aria-current={isCurrent ? "true" : undefined}
+                aria-label={`Câu ${i + 1}${isAnswered ? " (đã làm)" : ""}`}
+                className={`flex size-9 items-center justify-center rounded-md border text-sm tabular-nums transition-colors ${
+                  isCurrent
+                    ? "border-brand bg-brand text-brand-foreground"
+                    : isAnswered
+                      ? "border-brand/30 bg-brand/8 text-foreground hover:border-brand"
+                      : "border-border text-muted-foreground hover:border-brand/40 hover:text-foreground"
+                }`}
+              >
+                {i + 1}
+              </button>
+            </li>
+          );
+        })}
       </ol>
-
-      <button
-        type="button"
-        onClick={onNext}
-        disabled={current === total - 1}
-      >
-        Câu sau →
-      </button>
     </nav>
   );
 }

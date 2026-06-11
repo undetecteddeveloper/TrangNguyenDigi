@@ -1,11 +1,3 @@
-// ExamCard — một block đề trong Exam Browser (Layer 2). GĐ 3 M3.1 (LÀM LẠI).
-// Khớp *Block trong TEMPLATE/L2/L2_mobile.png:
-//   <Tên đề>            → exam.title (giữ nguyên — engineer Q2=B)
-//   (Nội dung): Trường, Mức độ → tượng trưng (chưa có data — engineer Q1)
-// Meta thật (môn/lớp, câu/phút) giữ lại vì hữu ích cho việc chọn đề.
-// Visual language "Focused / tối giản": thẻ giấy hairline, tiêu đề serif,
-// accent chàm chỉ khi hover.
-
 import Link from "next/link";
 import type { Exam } from "@/types/exam";
 
@@ -32,21 +24,6 @@ export function ExamCard({ exam }: { exam: Exam }) {
           <dt className="text-muted-foreground">Mức độ</dt>
           <dd className="text-muted-foreground">—</dd>
         </dl>
-
-        <div className="mt-1 flex items-center gap-5 border-t border-border pt-3 text-sm text-muted-foreground">
-          <span className="flex items-baseline gap-1.5">
-            <span className="font-medium tabular-nums text-foreground">
-              {exam.questionIds.length}
-            </span>
-            câu
-          </span>
-          <span className="flex items-baseline gap-1.5">
-            <span className="font-medium tabular-nums text-foreground">
-              {exam.durationMinutes}
-            </span>
-            phút
-          </span>
-        </div>
       </Link>
     </li>
   );

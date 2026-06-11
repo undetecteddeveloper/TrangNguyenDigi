@@ -1,6 +1,6 @@
 // QuestionRenderer — hiển thị nội dung một câu hỏi + 4 lựa chọn (Layer 2).
-// GĐ 1: text thuần, chưa style (xem PROJECT_ROADMAP.md M1.4).
-// GĐ 3 (M3.1) sẽ thêm markdown + LaTeX rendering cho `content`.
+// GĐ 3 M3.1 Task 2: style "focus mode" — eyebrow mono, nội dung serif đọc thoải mái.
+// (Markdown + LaTeX cho `content` để dành Task 5.)
 
 import type { ChoiceId, PublicQuestion } from "@/types/question";
 import { AnswerChoice } from "./AnswerChoice";
@@ -24,12 +24,18 @@ export function QuestionRenderer({
   onSelectAnswer,
 }: QuestionRendererProps) {
   return (
-    <div>
-      <p>
-        Câu {index}/{total}
-      </p>
-      <p>{question.content}</p>
-      <fieldset>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <span className="eyebrow">
+          Câu {index} / {total}
+        </span>
+        <p className="font-serif text-xl leading-relaxed text-foreground">
+          {question.content}
+        </p>
+      </div>
+
+      <fieldset className="flex flex-col gap-3 border-0 p-0">
+        <legend className="sr-only">Chọn đáp án</legend>
         {question.choices.map((choice) => (
           <AnswerChoice
             key={choice.id}
