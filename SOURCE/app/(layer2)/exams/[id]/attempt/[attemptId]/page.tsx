@@ -22,6 +22,7 @@ export default async function ExamPlayerPage({
     <ExamPlayer
       attemptId={attemptId}
       examTitle={data.exam.title}
+      durationMinutes={data.exam.durationMinutes}
       questions={data.questions}
     />
   );
