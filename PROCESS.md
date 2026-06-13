@@ -444,7 +444,7 @@ Post-MVP B — Layer 4         : [ ] Not Started
 # [Layer 2: Core Loop] — Task: GĐ 3 Polish — M3.1 Task 4 + 5 (Result page + Markdown/LaTeX)
 
 - **Latest prompt:** "Hoàn thành hai task còn lại của M3.1. Bắt đầu code." (model Opus). Trước đó C&D qua template `TEMPLATE/L2/resultpage_L2_mobile.png` + 6 câu hỏi engineer chốt.
-- **Latest step:** Testing (tsc + build pass) — **chờ engineer xác nhận visual để Git** (pattern milestone UI).
+- **Latest step:** ✅ **DONE — đã Git commit `35c1811`** (S#13, 2026-06-13).
 - **Layer status:** Layer 2 — tiếp tục style (visual language Focused).
 
 ### Quyết định C&D (engineer chốt qua bảng Q1–Q6)
