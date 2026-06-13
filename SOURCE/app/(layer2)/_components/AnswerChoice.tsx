@@ -4,6 +4,7 @@
 // Controlled qua props selected/onSelect.
 
 import type { Choice, ChoiceId } from "@/types/question";
+import { RichText } from "@/components/shared/RichText";
 
 interface AnswerChoiceProps {
   /** name của nhóm radio — để mỗi câu là một nhóm độc lập. */
@@ -46,9 +47,11 @@ export function AnswerChoice({
       >
         {choice.id}
       </span>
-      <span className="pt-0.5 text-base leading-relaxed text-card-foreground">
-        {choice.text}
-      </span>
+      <RichText
+        text={choice.text}
+        inline
+        className="pt-0.5 text-base leading-relaxed text-card-foreground"
+      />
     </label>
   );
 }

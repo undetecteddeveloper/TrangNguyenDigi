@@ -1,13 +1,16 @@
-// Result — /exams/[id]/attempt/[attemptId]/result (Layer 2). M2.6.
-// Server Component (GĐ 2): đọc kết quả đã chấm + lưu trong DB qua getResult().
+// Result — /exams/[id]/attempt/[attemptId]/result (Layer 2). M2.6 → GĐ 3 M3.1 Task 4.
+// Server Component: đọc kết quả đã chấm + lưu trong DB qua getResult().
 // Attempt chưa nộp / không tồn tại / không thuộc user → redirect về trang đề (Q2=A).
-// (Trước đây GĐ 1 đọc sessionStorage + chấm điểm client-side.)
+// Bố cục theo TEMPLATE/L2/resultpage_L2_mobile.png: block điểm · chủ đề + save/share ·
+// nav (Chi tiết → page riêng / Trở về homepage / Làm lại). Visual "tờ giấy trắng".
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getResult } from "@/app/(layer2)/queries";
+import { SiteHeader } from "@/app/(layer2)/_components/SiteHeader";
 import { ScoreCard } from "@/app/(layer2)/_components/ScoreCard";
 import { TopicBreakdown } from "@/app/(layer2)/_components/TopicBreakdown";
+import { ResultActions } from "@/app/(layer2)/_components/ResultActions";
 
 export default async function ResultPage({
   params,
@@ -21,34 +24,47 @@ export default async function ResultPage({
     redirect(`/exams/${id}`);
   }
 
-  const { examTitle, result, questionContent } = data;
+  const { examTitle, result } = data;
 
   return (
-    <main>
-      <h1>Kết quả: {examTitle}</h1>
+    <div className="min-h-dvh bg-background">
+      <SiteHeader />
 
-      <ScoreCard result={result} />
-      <TopicBreakdown topics={result.topicBreakdown} />
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-6 py-8">
+        <ScoreCard examTitle={examTitle} result={result} />
 
-      <section>
-        <h2>Chi tiết từng câu</h2>
-        <ol>
-          {result.perQuestion.map((r, i) => (
-            <li key={r.questionId}>
-              <p>
-                Câu {i + 1}: {questionContent[r.questionId]}
-              </p>
-              <p>
-                Bạn chọn: {r.selected ?? "(bỏ trống)"} · Đáp án đúng: {r.correct}{" "}
-                · {r.isCorrect ? "Đúng" : "Sai"}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </section>
+        {/* Chủ đề (trái) · Save/Share trên + Trang chủ dưới (phải) — bố cục template:
+            save/share canh đỉnh, "Trang chủ" canh đáy block chủ đề (justify-between). */}
+        <div className="grid grid-cols-[1fr_auto] items-stretch gap-4">
+          <TopicBreakdown topics={result.topicBreakdown} />
+          <div className="flex w-28 flex-col justify-between gap-3 sm:w-36">
+            <ResultActions />
+            {/* Trở về homepage → "/" (placeholder; homepage thật ở UI L1 — Q4). */}
+            <Link
+              href="/"
+              className="flex items-center justify-center rounded-xl border border-border bg-card px-3 py-4 text-center text-sm text-foreground transition-colors hover:border-brand"
+            >
+              Trang chủ
+            </Link>
+          </div>
+        </div>
 
-      {/* "Làm lại" → màn Detail, nơi tạo attempt mới (Q1=B). */}
-      <Link href={`/exams/${id}`}>Làm lại</Link>
-    </main>
+        {/* Nav cuối: Chi tiết (page riêng, Q5) · Làm lại (→ Detail, tạo attempt mới). */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href={`/exams/${id}/attempt/${attemptId}/result/detail`}
+            className="rounded-lg border border-brand bg-brand px-4 py-3 text-center text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
+          >
+            Xem chi tiết
+          </Link>
+          <Link
+            href={`/exams/${id}`}
+            className="rounded-lg border border-border bg-card px-4 py-3 text-center text-sm font-medium text-foreground transition-colors hover:border-brand"
+          >
+            Làm lại
+          </Link>
+        </div>
+      </main>
+    </div>
   );
 }

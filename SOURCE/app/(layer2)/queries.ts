@@ -5,7 +5,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Exam } from "@/types/exam";
-import type { PublicQuestion } from "@/types/question";
+import type { Choice, PublicQuestion } from "@/types/question";
 import type { ScoreResult } from "@/types/result";
 
 // --- Mappers (snake_case DB → camelCase type) ----------------------------
@@ -118,12 +118,15 @@ type ResultRow = {
   topic_breakdown: ScoreResult["topicBreakdown"];
 };
 
+/** Nội dung một câu để render màn Chi tiết (post-submit nên kèm được lựa chọn). */
+export type ResultQuestion = { content: string; choices: Choice[] };
+
 export type ExamResult = {
   examId: string;
   examTitle: string;
   result: ScoreResult;
-  /** questionId → nội dung câu hỏi (để render chi tiết từng câu). */
-  questionContent: Record<string, string>;
+  /** questionId → nội dung + lựa chọn (để render Chi tiết từng câu, Task 4). */
+  questions: Record<string, ResultQuestion>;
 };
 
 /**
@@ -161,19 +164,19 @@ export async function getResult(attemptId: string): Promise<ExamResult | null> {
     topicBreakdown: row.topic_breakdown,
   };
 
-  // Nội dung câu hỏi để render (post-submit nên hiển thị được).
+  // Nội dung + lựa chọn câu hỏi để render Chi tiết (post-submit nên hiển thị được).
   const { data: qs, error: qErr } = await supabase
     .from("questions")
-    .select("id, content")
+    .select("id, content, choices")
     .in(
       "id",
       result.perQuestion.map((p) => p.questionId),
     );
   if (qErr) throw qErr;
-  const questionContent: Record<string, string> = {};
-  for (const q of qs as { id: string; content: string }[]) {
-    questionContent[q.id] = q.content;
+  const questions: Record<string, ResultQuestion> = {};
+  for (const q of qs as { id: string; content: string; choices: Choice[] }[]) {
+    questions[q.id] = { content: q.content, choices: q.choices };
   }
 
-  return { examId: exam.id, examTitle: exam.title, result, questionContent };
+  return { examId: exam.id, examTitle: exam.title, result, questions };
 }

@@ -226,7 +226,7 @@ Trigger Event là tín hiệu từ engineer hoặc trạng thái nội bộ củ
       - Ghi vào `PROCESS.md` trường `*Issue` với mô tả lỗi + tên file screenshot.
       - Sửa code → quay lại bước 3.1 (chụp lại).
       - Lặp cho đến khi output khớp tham chiếu ở mức chấp nhận được.
-
+   > Lưu ý: Lưu screenshot tại TEMP_SCREENSHOT
    > **Ngưỡng "pass" visual:** Không yêu cầu pixel-perfect. Pass khi: không có layout bị vỡ, đúng visual language của layer, đúng breakpoint, không có console error. Sai lệch nhỏ về màu sắc/spacing cho phép — ghi chú vào `PROCESS.md` để sửa sau.
 
    > **Nếu engineer không cung cấp reference image:** Bỏ qua bước so sánh, chỉ chụp screenshot và ghi chú trong `PROCESS.md` rằng visual chưa được verify với tham chiếu. Chuyển sang bước tiếp theo.
