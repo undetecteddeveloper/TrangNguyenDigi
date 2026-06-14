@@ -1,6 +1,7 @@
 // StartAttemptButton — nút "Bắt đầu làm bài" trên màn Exam Detail (Layer 2).
 // GĐ 2 (M2.6): startAttempt() Server Action tạo attempt trong DB rồi redirect.
 // (Trước đây GĐ 1 sinh attemptId client-side bằng crypto.randomUUID.)
+// GĐ 3 M3.2: style brand, full-width trên mobile, auto trên desktop.
 
 import { startAttempt } from "@/app/(layer2)/actions";
 
@@ -9,7 +10,12 @@ export function StartAttemptButton({ examId }: { examId: string }) {
 
   return (
     <form action={start}>
-      <button type="submit">Bắt đầu làm bài</button>
+      <button
+        type="submit"
+        className="w-full rounded-lg bg-brand px-6 py-3 font-medium text-brand-foreground transition-opacity hover:opacity-90 sm:w-auto sm:px-12"
+      >
+        Bắt đầu làm bài
+      </button>
     </form>
   );
 }

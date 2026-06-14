@@ -4,9 +4,10 @@
 // Task 3: ExamTimer đếm ngược → hết giờ auto-submit (PA A); FlagButton đánh dấu câu.
 // Visual "focus mode" (UI-LAYER-MAP 4.2): SiteHeader + top bar sticky (timer · tên đề ·
 // flag), nội dung căn giữa cột hẹp, không sidebar/distraction.
+// M3.2 Task 1: mobile vuốt trái/phải chuyển câu (useSwipe); desktop dùng phím ← → .
 "use client";
 
-import { useRef, useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { submitExam } from "@/app/(layer2)/actions";
 import { SiteHeader } from "./SiteHeader";
 import { ExamTimer } from "./ExamTimer";
@@ -14,6 +15,7 @@ import { FlagButton } from "./FlagButton";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { QuestionPagination } from "./QuestionPagination";
 import { useExamPlayer } from "@/hooks/useExamPlayer";
+import { useSwipe } from "@/hooks/useSwipe";
 import type { PublicQuestion } from "@/types/question";
 
 interface ExamPlayerProps {
@@ -29,10 +31,26 @@ export function ExamPlayer({
   durationMinutes,
   questions,
 }: ExamPlayerProps) {
-  const { current, answers, flags, selectAnswer, toggleFlag, goto } =
+  const { current, answers, flags, selectAnswer, toggleFlag, goto, next, prev } =
     useExamPlayer(questions.length);
   const [submitting, startSubmit] = useTransition();
   const submittedRef = useRef(false);
+
+  // Mobile: vuốt trái → câu sau, vuốt phải → câu trước (gắn lên vùng đọc câu hỏi).
+  const swipe = useSwipe({ onSwipeLeft: next, onSwipeRight: prev });
+
+  // Desktop: phím ← → chuyển câu. Bỏ qua khi focus đang ở ô chọn đáp án (radio)
+  // để mũi tên vẫn dùng để chọn A/B/C/D theo hành vi gốc của radio group.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next, prev]);
 
   const question = questions[current];
 
@@ -74,13 +92,16 @@ export function ExamPlayer({
       </div>
 
       <main className="mx-auto w-full max-w-2xl px-6 py-10">
-        <QuestionRenderer
-          index={current + 1}
-          total={questions.length}
-          question={question}
-          selectedAnswer={answers[question.id]}
-          onSelectAnswer={(choice) => selectAnswer(question.id, choice)}
-        />
+        {/* Vùng đọc câu hỏi — bắt cử chỉ vuốt ngang để chuyển câu trên mobile. */}
+        <div onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
+          <QuestionRenderer
+            index={current + 1}
+            total={questions.length}
+            question={question}
+            selectedAnswer={answers[question.id]}
+            onSelectAnswer={(choice) => selectAnswer(question.id, choice)}
+          />
+        </div>
 
         <div className="mt-10 border-t border-border pt-6">
           <QuestionPagination
