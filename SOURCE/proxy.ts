@@ -8,5 +8,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
+  // Loại trừ static asset: _next, favicon, và mọi path có phần mở rộng (chứa dấu
+  // chấm) — vd `/models/*.glb` của homepage 3D. Nếu không, request model sẽ bị
+  // route guard redirect `/login` với khách chưa đăng nhập (homepage là public).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
