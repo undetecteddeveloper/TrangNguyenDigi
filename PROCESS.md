@@ -760,3 +760,10 @@ Post-MVP B — Layer 4         : [ ] Not Started
 - L1 (Homepage3D/HomepageMobile/Scene3D) — KHÔNG đụng, vẫn dùng nền riêng (`#0d0d11`/space) như cũ, đúng yêu cầu "ngoài UI L1".
 - `tsc --noEmit` + `next build`: pass (routes không đổi). Đã `rm -rf .next`.
 - Không Playwright phiên này → chờ engineer xem `/exams` (và các trang L2 khác: Detail/Player/Result) trên browser để confirm trước khi Git.
+
+### Bổ sung — tăng độ sáng shadow ExamCard hover (engineer feedback)
+*Yêu cầu:* tăng độ đậm (độ sáng trong dark theme) của shadow khi hover ExamCard, chỉ việc này.
+*Fixing process:* `ExamCard.tsx` hover shadow `rgba(255,255,255,0.15)` → `rgba(255,255,255,0.35)`. `tsc --noEmit` pass.
+
+### Git — Done (2026-06-16)
+Commit `6f9c803` (push lên `origin/main`), gộp: M3.3 hover CTA follow-up, M3.4 mobile fallback (HomepageMobile/HomepageStage + computer.png), EBP theme + layout fix, dark root theme, shadow hover tăng sáng. **Latest step: Git ✅.** Chờ TE1 cho task tiếp theo.
