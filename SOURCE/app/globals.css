@@ -52,51 +52,16 @@
 }
 
 :root {
-  /* Layer 2 "tờ giấy trắng": nền giấy ấm nhẹ, mực mềm (không đen tuyền) cho dễ đọc. */
-  --background: oklch(0.99 0.003 95);
-  --foreground: oklch(0.22 0.01 60);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.01 60);
-  /* Accent duy nhất — mực chàm trầm, dùng tiết chế (chọn/hover/focus). */
-  --brand: oklch(0.48 0.1 264);
-  --brand-foreground: oklch(0.99 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0.003 95);
-  --muted-foreground: oklch(0.52 0.01 60);
-  --accent: oklch(0.96 0.003 95);
-  --accent-foreground: oklch(0.22 0.01 60);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.004 80);
-  --input: oklch(0.9 0.004 80);
-  --ring: var(--brand);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
+  /* Dark theme = ROOT: nền/chữ/shadow đảo ngược (đen <-> trắng) từ bản "tờ giấy
+     trắng" cũ. Toàn bộ Layer NGOÀI L1 (L2/L3/L4) dựa vào (based on) root này;
+     L1 (homepage 3D) có nền riêng, không phụ thuộc các biến này. */
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --brand: oklch(0.62 0.12 264);
-  --brand-foreground: oklch(0.15 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
+  /* Accent duy nhất — mực chàm sáng (tương phản đủ trên nền tối). */
+  --brand: oklch(0.62 0.12 264);
+  --brand-foreground: oklch(0.15 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.922 0 0);
@@ -116,6 +81,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -137,7 +103,7 @@
       "calt" 1;
     text-rendering: optimizeLegibility;
   }
-  /* Tiêu đề & nội dung đọc dùng serif (Merriweather) — chất "giấy in". */
+  /* Tiêu đề & nội dung đọc dùng serif (Merriweather). */
   h1,
   h2,
   h3 {
@@ -148,4 +114,42 @@
   .eyebrow {
     @apply font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground;
   }
+}
+
+/* ============================================================
+   THEME HOOKS — hệ thống theme per-layer/per-trang.
+   Mỗi UI Layer (hoặc trang) override các biến này trong SCOPE
+   riêng (class .theme-*) → KHÔNG kế thừa theme của nhau.
+   Giá trị mặc định ở :root = đúng giao diện hiện tại, nên các
+   component DÙNG CHUNG (SiteHeader, ExamCard) giữ nguyên ở mọi
+   nơi NGOÀI scope. "Chỉ đổi theme, không đổi thiết kế."
+   ============================================================ */
+:root {
+  /* Navbar (SiteHeader) */
+  --nav-bg: color-mix(in srgb, var(--background) 90%, transparent);
+  --nav-border: var(--border);
+  --nav-fg: var(--foreground);
+  --nav-fg-muted: var(--muted-foreground);
+  /* Block nội dung (ExamCard) */
+  --block-bg: var(--card);
+  --block-fg: var(--card-foreground);
+  --block-fg-muted: var(--muted-foreground);
+  --block-border: var(--border);
+  --block-hover: var(--brand);
+}
+
+/* Theme: Exam Browser Page (/exams) — Layer 2.
+   Navbar RGB(26,54,93) · nền/shadow dark (kế thừa root) ·
+   block RGB(47,133,90) · hover RGB(255,249,69) · chữ trắng. */
+.theme-ebp {
+  --nav-bg: rgb(26 54 93 / 0.95);
+  --nav-border: rgb(255 255 255 / 0.14);
+  --nav-fg: #ffffff;
+  --nav-fg-muted: rgb(255 255 255 / 0.82);
+
+  --block-bg: rgb(47 133 90);
+  --block-fg: #ffffff;
+  --block-fg-muted: rgb(255 255 255 / 0.8);
+  --block-border: rgb(255 255 255 / 0.18);
+  --block-hover: rgb(255 249 69);
 }

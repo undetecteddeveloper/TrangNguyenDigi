@@ -76,7 +76,7 @@ export function ExamFilters({ subjects, grades, selected }: ExamFiltersProps) {
             aria-label="Bộ lọc"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="flex flex-col items-center gap-2 border-r border-border py-4 pl-3 pr-2.5"
+            className="flex flex-col items-center gap-2 rounded-md border-r border-border py-4 pl-3 pr-2.5 transition-all duration-200 hover:shadow-[0_8px_24px_rgba(255,255,255,0.15)]"
           >
             <span className="relative">
               <Triangle open={open} />

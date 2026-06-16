@@ -211,12 +211,12 @@ Trigger Event là tín hiệu từ engineer hoặc trạng thái nội bộ củ
 ```bash
    claude mcp add playwright -- npx @playwright/mcp@latest
 ```
-   Engineer phải cung cấp **ảnh tham chiếu** (reference image) — mockup, Figma export, hoặc screenshot mẫu — đặt tại `ASSETS/screenshots/reference/<tên-feature>.png`.
+   Engineer phải cung cấp **ảnh tham chiếu** (reference image) — mockup, Figma export, hoặc screenshot mẫu — đặt tại `TEMPLATE/<tên>.png`.
 
    **Vòng lặp visual verification:**
    1. Đảm bảo dev server đang chạy (`npm run dev` trên `localhost:3000`).
    2. Dùng Playwright MCP điều hướng đến route vừa thay đổi.
-   3. Chụp screenshot toàn trang ở **hai viewport**: desktop (1280px) và mobile (375px). Lưu vào `ASSETS/screenshots/output/<tên-feature>-desktop.png` và `...-mobile.png`.
+   3. Chụp screenshot toàn trang ở **hai viewport**: desktop (1280px) và mobile (375px). Lưu vào 'TEMP_SCREENSHOT'.
    4. Đặt screenshot vừa chụp cạnh ảnh tham chiếu, phân tích bằng mắt:
       - Layout tổng thể có vỡ không?
       - Visual language có đúng với layer? (xem `UI-LAYER-MAP.md` Mục 1)

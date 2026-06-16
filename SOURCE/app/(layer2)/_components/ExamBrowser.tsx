@@ -1,6 +1,6 @@
-// ExamBrowser — danh sách đề trong Exam Browser (Layer 2). GĐ 3 M3.1 (LÀM LẠI).
-// Danh sách block DỌC 1 cột (khớp TEMPLATE/L2/L2_mobile.png: *Block1/2/3 xếp dọc).
-// Empty state khi lọc không ra kết quả. Lọc do ExamFilters (overlay) đảm nhiệm.
+// ExamBrowser — danh sách đề trong Exam Browser (Layer 2).
+// Lưới ExamCard 2 cột × n hàng (n phụ thuộc số đề từ DB). Empty state khi lọc
+// không ra kết quả. Lọc do ExamFilters (overlay) đảm nhiệm.
 
 import type { Exam } from "@/types/exam";
 import { ExamCard } from "./ExamCard";
@@ -18,7 +18,7 @@ export function ExamBrowser({ exams }: { exams: Exam[] }) {
   }
 
   return (
-    <ul className="flex flex-col gap-4">
+    <ul className="grid grid-cols-2 gap-4">
       {exams.map((exam) => (
         <ExamCard key={exam.id} exam={exam} />
       ))}

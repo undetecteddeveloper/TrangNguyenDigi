@@ -12,11 +12,11 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-[color:var(--nav-border)] bg-[var(--nav-bg)] backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6">
         <Link
           href="/"
-          className="font-serif text-lg tracking-tight text-foreground"
+          className="font-serif text-lg tracking-tight text-[var(--nav-fg)]"
         >
           Trạng Nguyên
         </Link>
@@ -29,11 +29,11 @@ export function SiteHeader() {
             onClick={() => setMenuOpen((v) => !v)}
             className="flex items-center gap-2 py-2"
           >
-            <span className="eyebrow">Menu</span>
+            <span className="eyebrow text-[var(--nav-fg-muted)]">Menu</span>
             <svg
               aria-hidden
               viewBox="0 0 12 8"
-              className={`size-3 text-muted-foreground transition-transform ${
+              className={`size-3 text-[var(--nav-fg-muted)] transition-transform ${
                 menuOpen ? "rotate-180" : ""
               }`}
             >

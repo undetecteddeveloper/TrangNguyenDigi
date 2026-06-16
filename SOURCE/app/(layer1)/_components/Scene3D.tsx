@@ -6,11 +6,14 @@
 // Bấm vào máy AIO → vào trang luyện đề (/exams). Model .glb từ ASSETS/models
 // đã copy sang public/models để serve runtime cho useGLTF.
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF, ContactShadows, Html } from "@react-three/drei";
 import { useRouter } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+
+// Biên độ phóng to model khi hover (≈6%) — nằm trong khoảng 5–8% mong muốn.
+const HOVER_SCALE = 1.06;
 
 const AIO_URL = "/models/all_in_one_pc.glb";
 const BOOK_URL = "/models/stack_of_books.glb";
@@ -31,6 +34,8 @@ type ModelProps = {
   onClick?: () => void;
   onPointerOver?: () => void;
   onPointerOut?: () => void;
+  /** Khi true, model nhẹ nhàng phóng to (hover) qua transition lerp mỗi frame. */
+  active?: boolean;
 };
 
 // Model — nạp .glb, chuẩn hoá: xoay (nếu có) → scale theo target → căn tâm x/z
@@ -44,9 +49,22 @@ function Model({
   onClick,
   onPointerOver,
   onPointerOut,
+  active = false,
 }: ModelProps) {
   const { scene } = useGLTF(url);
   const [rx, ry, rz] = rotation;
+  const outerRef = useRef<THREE.Group>(null);
+
+  // Lerp scale group bọc ngoài về mục tiêu (1 hoặc HOVER_SCALE) mỗi frame →
+  // phóng to/thu nhỏ mượt như transition. Group ngoài có scale=1 mặc định nên
+  // không đụng tới scale chuẩn-hoá bbox ở group trong.
+  useFrame(() => {
+    const g = outerRef.current;
+    if (!g) return;
+    const t = active ? HOVER_SCALE : 1;
+    g.scale.x += (t - g.scale.x) * 0.15;
+    g.scale.y = g.scale.z = g.scale.x;
+  });
 
   const { scale, offset } = useMemo(() => {
     // QUAN TRỌNG: reset transform của scene về gốc TRƯỚC khi đo. Nếu không, mỗi
@@ -81,6 +99,7 @@ function Model({
 
   return (
     <group
+      ref={outerRef}
       position={position}
       onClick={onClick}
       onPointerOver={onPointerOver}
@@ -154,10 +173,25 @@ function SceneContents() {
         target={1.15}
         position={[0, 0, -0.18]}
         rotation={[0, Math.PI, 0]}
+        active={hovered}
         onClick={() => router.push("/exams")}
         onPointerOver={() => setCursor(true)}
         onPointerOut={() => setCursor(false)}
       />
+
+      {/* CTA hover: nổi lên phía trên máy AIO khi user rê chuột vào nó. Đặt
+          pointerEvents none để không chặn hover của canvas bên dưới. */}
+      <Html position={[0, 1.35, -0.18]} center style={{ pointerEvents: "none" }}>
+        <span
+          className={`whitespace-nowrap font-mono text-xs uppercase tracking-[0.2em] transition-all duration-300 ${
+            hovered
+              ? "translate-y-0 text-zinc-200 opacity-100"
+              : "translate-y-1 text-zinc-500 opacity-0"
+          }`}
+        >
+          Nhấn để bắt đầu
+        </span>
+      </Html>
 
       {/* Quầng sáng xanh nhạt từ màn hình (mô phỏng ảnh template). */}
       <pointLight

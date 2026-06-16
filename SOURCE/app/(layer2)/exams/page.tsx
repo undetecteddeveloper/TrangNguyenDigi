@@ -29,11 +29,14 @@ export default async function ExamsPage({
   ]);
 
   return (
-    <>
+    // Scope theme EBP: override biến --nav-*/--block-* (globals.css). Nền dark
+    // kế thừa root (bg-background) — đúng yêu cầu "Layer ngoài L1 dựa vào root".
+    <div className="theme-ebp min-h-dvh bg-background">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-2xl">
-        {/* Hàng ngang: *Filter (trái, sticky, overlay) | exam list (phải, flex-1). */}
+      <main className="mx-auto w-full max-w-3xl">
+        {/* MỘT block căn giữa: *Filter (trái, sticky, overlay) + lưới ExamCard
+            2 cột × n hàng (phải, flex-1). mx-auto của <main> giữ block căn giữa. */}
         <div className="relative flex items-start">
           <ExamFilters
             subjects={facets.subjects}
@@ -46,6 +49,6 @@ export default async function ExamsPage({
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }
