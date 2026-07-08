@@ -1,14 +1,14 @@
 "use client";
 
-// SiteHeader — navbar DÙNG CHUNG cho UI Layer 2/3/4 (KHÔNG dùng cho L1 — L1 có
-// HomeHeader riêng). Các thẻ nav độc lập: "Phân tích" (→ L3), "Nhập đề" (→ L4),
-// "Tài khoản" (dropdown: Đăng ký / Đăng nhập). Nền theo token --nav-* (navy ở L2
-// qua .theme-l2; L3/L4 khi build sẽ bọc theme tương tự để đồng bộ).
+// HomeHeader — navbar cho UI Layer 1 (Homepage/Entry). Khác navbar L2:
+// các mục là thẻ <a> độc lập — "Về chúng tôi" (link) + "Tài khoản" (dropdown:
+// Đăng ký, Đăng nhập). Dùng token --nav-* (mặc định root, nền tối của hero L1).
+// Không kế thừa "Menu" của SiteHeader L2 (khách chưa đăng nhập, nhu cầu khác).
 
 import Link from "next/link";
 import { useState } from "react";
 
-export function SiteHeader() {
+export function HomeHeader() {
   const [acctOpen, setAcctOpen] = useState(false);
 
   return (
@@ -22,18 +22,12 @@ export function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-6">
-          {/* Thẻ <a> độc lập — Phân tích (Layer 3) + Nhập đề (Layer 4). */}
+          {/* Thẻ <a> độc lập — Về chúng tôi. */}
           <Link
-            href="/me/dashboard"
+            href="#"
             className="eyebrow text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)]"
           >
-            Phân tích
-          </Link>
-          <Link
-            href="/admin/import"
-            className="eyebrow text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)]"
-          >
-            Nhập đề
+            Về chúng tôi
           </Link>
 
           {/* Tài khoản — dropdown: Đăng ký / Đăng nhập. */}

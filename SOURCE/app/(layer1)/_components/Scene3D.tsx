@@ -7,12 +7,11 @@
 // đã copy sang public/models để serve runtime cho useGLTF.
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, ContactShadows, Html } from "@react-three/drei";
+import { useGLTF, ContactShadows, Html, useTexture } from "@react-three/drei";
 import { useRouter } from "next/navigation";
 import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-// Biên độ phóng to model khi hover (≈6%) — nằm trong khoảng 5–8% mong muốn.
 const HOVER_SCALE = 1.06;
 
 const AIO_URL = "/models/all_in_one_pc.glb";
@@ -23,24 +22,41 @@ useGLTF.preload(AIO_URL);
 useGLTF.preload(BOOK_URL);
 useGLTF.preload(PENCIL_URL);
 
+const AIO_LEN = 1.15;
+
+// ── Kích thước bàn (chia sẻ giữa Desk + bố trí phòng) ─────────────────────────
+const TOP_W = 3.6;
+const TOP_D = 1.7;
+const TOP_T = 0.08;
+const LEG_H = 1.4;
+const LEG_BOTTOM = -TOP_T - LEG_H; // -1.48
+const TABLE_BACK_Z = -TOP_D / 2; // -0.85
+
+// ── Phòng (hậu cảnh) ──────────────────────────────────────────────────────────
+const WALL_GAP = TOP_W * 0.1; // 0.36
+const WALL_Z = TABLE_BACK_Z - WALL_GAP; // -1.21
+const WALL_W = 14;
+const WALL_H = 8;
+const FLOOR_W = 16;
+const FLOOR_D = 12;
+
+const WALL_TEX_URL = "/images/wall-texture.jpg";
+const FLOOR_TEX_URL = "/images/floor-texture.jpg";
+useTexture.preload(WALL_TEX_URL);
+useTexture.preload(FLOOR_TEX_URL);
+
 type ModelProps = {
   url: string;
-  /** Kích thước mục tiêu (chiều dài cạnh lớn nhất, theo đơn vị scene). */
   target: number;
-  /** Vị trí đặt gốc-đáy của model trên bàn (y=0 là mặt bàn). */
   position?: [number, number, number];
-  /** Xoay model (áp dụng trước khi tính bbox để vẫn đặt đáy chạm bàn đúng). */
   rotation?: [number, number, number];
   onClick?: () => void;
   onPointerOver?: () => void;
   onPointerOut?: () => void;
-  /** Khi true, model nhẹ nhàng phóng to (hover) qua transition lerp mỗi frame. */
   active?: boolean;
+  alignBackZ?: boolean;
 };
 
-// Model — nạp .glb, chuẩn hoá: xoay (nếu có) → scale theo target → căn tâm x/z
-// và đặt đáy lên mặt bàn (y=0). Mỗi model dùng đúng 1 lần nên thao tác trực tiếp
-// trên `scene` (không cần clone).
 function Model({
   url,
   target,
@@ -50,14 +66,12 @@ function Model({
   onPointerOver,
   onPointerOut,
   active = false,
+  alignBackZ = false,
 }: ModelProps) {
   const { scene } = useGLTF(url);
   const [rx, ry, rz] = rotation;
   const outerRef = useRef<THREE.Group>(null);
 
-  // Lerp scale group bọc ngoài về mục tiêu (1 hoặc HOVER_SCALE) mỗi frame →
-  // phóng to/thu nhỏ mượt như transition. Group ngoài có scale=1 mặc định nên
-  // không đụng tới scale chuẩn-hoá bbox ở group trong.
   useFrame(() => {
     const g = outerRef.current;
     if (!g) return;
@@ -67,10 +81,6 @@ function Model({
   });
 
   const { scale, offset } = useMemo(() => {
-    // QUAN TRỌNG: reset transform của scene về gốc TRƯỚC khi đo. Nếu không, mỗi
-    // lần render lại đo trên scene đã scale/dời của lần trước → cộng dồn → model
-    // nhảy loạn / biến mất khi re-render (vd hover). Chỉ bake rotation (không
-    // cộng dồn) rồi đo; scale/offset áp lên group bọc ngoài, KHÔNG đụng scene.
     scene.position.set(0, 0, 0);
     scene.scale.set(1, 1, 1);
     scene.rotation.set(rx, ry, rz);
@@ -87,15 +97,13 @@ function Model({
     const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const s = target / maxDim;
-    // Đưa tâm x/z về 0 và đáy (min.y) chạm mặt bàn (y=0), tính trong không gian
-    // đã scale (nhân s) vì position của group áp sau scale trong ma trận node.
     const offset: [number, number, number] = [
       -center.x * s,
       -box.min.y * s,
-      -center.z * s,
+      (alignBackZ ? -box.min.z : -center.z) * s,
     ];
     return { scale: s, offset };
-  }, [scene, target, rx, ry, rz]);
+  }, [scene, target, rx, ry, rz, alignBackZ]);
 
   return (
     <group
@@ -105,8 +113,6 @@ function Model({
       onPointerOver={onPointerOver}
       onPointerOut={onPointerOut}
     >
-      {/* Group bọc mang scale + offset — scene giữ transform gốc để lần đo sau
-          ổn định (không cộng dồn). */}
       <group scale={scale} position={offset}>
         <primitive object={scene} />
       </group>
@@ -114,7 +120,6 @@ function Model({
   );
 }
 
-// Bàn gỗ dựng từ hình khối (không có model bàn riêng) — mặt bàn ở y=0.
 function Desk() {
   const wood = (
     <meshStandardMaterial color="#c89b6a" roughness={0.85} metalness={0.05} />
@@ -122,22 +127,16 @@ function Desk() {
   const leg = (
     <meshStandardMaterial color="#8a8f99" roughness={0.5} metalness={0.4} />
   );
-  const topW = 3.6;
-  const topD = 1.7;
-  const topT = 0.08;
-  const legH = 1.4;
-  const legX = topW / 2 - 0.18;
-  const legZ = topD / 2 - 0.18;
-  const legY = -topT - legH / 2;
+  const legX = TOP_W / 2 - 0.18;
+  const legZ = TOP_D / 2 - 0.18;
+  const legY = -TOP_T - LEG_H / 2;
 
   return (
     <group>
-      {/* Mặt bàn — tâm đặt sao cho mặt trên ở y=0. */}
-      <mesh position={[0, -topT / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[topW, topT, topD]} />
+      <mesh position={[0, -TOP_T / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[TOP_W, TOP_T, TOP_D]} />
         {wood}
       </mesh>
-      {/* 4 chân kim loại mảnh. */}
       {[
         [legX, legY, legZ],
         [-legX, legY, legZ],
@@ -145,10 +144,40 @@ function Desk() {
         [-legX, legY, -legZ],
       ].map(([x, y, z], i) => (
         <mesh key={i} position={[x, y, z]} castShadow>
-          <boxGeometry args={[0.06, legH, 0.06]} />
+          <boxGeometry args={[0.06, LEG_H, 0.06]} />
           {leg}
         </mesh>
       ))}
+    </group>
+  );
+}
+
+function Room() {
+  const [wall, floor] = useTexture([WALL_TEX_URL, FLOOR_TEX_URL]);
+
+  useMemo(() => {
+    wall.wrapS = wall.wrapT = THREE.RepeatWrapping;
+    wall.repeat.set(3, 2);
+    wall.colorSpace = THREE.SRGBColorSpace;
+    floor.wrapS = floor.wrapT = THREE.RepeatWrapping;
+    floor.repeat.set(4, 3);
+    floor.colorSpace = THREE.SRGBColorSpace;
+  }, [wall, floor]);
+
+  return (
+    <group>
+      <mesh
+        position={[0, LEG_BOTTOM, WALL_Z + FLOOR_D / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        receiveShadow
+      >
+        <planeGeometry args={[FLOOR_W, FLOOR_D]} />
+        <meshStandardMaterial map={floor} roughness={1} />
+      </mesh>
+      <mesh position={[0, LEG_BOTTOM + WALL_H / 2, WALL_Z]} receiveShadow>
+        <planeGeometry args={[WALL_W, WALL_H]} />
+        <meshStandardMaterial map={wall} roughness={1} />
+      </mesh>
     </group>
   );
 }
@@ -163,61 +192,51 @@ function SceneContents() {
   }
 
   return (
-    // Dời cả sân khấu xuống để camera (nhìn về gốc) ngắm vào quãng giữa bàn/máy.
     <group position={[0, -0.35, 0]}>
-      <Desk />
+      <Room />
 
-      {/* Máy AIO — trung tâm, hơi lùi ra sau; bấm vào để vào luyện đề. */}
-      <Model
-        url={AIO_URL}
-        target={1.15}
-        position={[0, 0, -0.18]}
-        rotation={[0, Math.PI, 0]}
-        active={hovered}
-        onClick={() => router.push("/exams")}
-        onPointerOver={() => setCursor(true)}
-        onPointerOut={() => setCursor(false)}
-      />
+      <group>
+        <Desk />
 
-      {/* CTA hover: nổi lên phía trên máy AIO khi user rê chuột vào nó. Đặt
-          pointerEvents none để không chặn hover của canvas bên dưới. */}
-      <Html position={[0, 1.35, -0.18]} center style={{ pointerEvents: "none" }}>
-        <span
-          className={`whitespace-nowrap font-mono text-xs uppercase tracking-[0.2em] transition-all duration-300 ${
-            hovered
-              ? "translate-y-0 text-zinc-200 opacity-100"
-              : "translate-y-1 text-zinc-500 opacity-0"
-          }`}
-        >
-          Nhấn để bắt đầu
-        </span>
-      </Html>
+        <Model
+          url={AIO_URL}
+          target={AIO_LEN}
+          position={[0, 0, -0.18]}
+          rotation={[0, Math.PI, 0]}
+          active={hovered}
+          onClick={() => router.push("/exams")}
+          onPointerOver={() => setCursor(true)}
+          onPointerOut={() => setCursor(false)}
+        />
 
-      {/* Quầng sáng xanh nhạt từ màn hình (mô phỏng ảnh template). */}
-      <pointLight
-        position={[0, 0.7, 0.15]}
-        intensity={hovered ? 4 : 2.4}
-        distance={2.6}
-        color="#bcd2ff"
-      />
+        <Html position={[0, 1.35, -0.18]} center style={{ pointerEvents: "none" }}>
+          <span
+            className={`whitespace-nowrap font-mono text-xs uppercase tracking-[0.2em] transition-all duration-300 ${
+              hovered
+                ? "translate-y-0 text-zinc-200 opacity-100"
+                : "translate-y-1 text-zinc-500 opacity-0"
+            }`}
+          >
+            Nhấn để bắt đầu
+          </span>
+        </Html>
 
-      {/* Đạo cụ: sách bên phải, bút bên trái. */}
-      <Model url={BOOK_URL} target={0.5} position={[1.05, 0, 0.3]} rotation={[0, -0.4, 0]} />
-      <Model
-        url={PENCIL_URL}
-        target={0.62}
-        position={[-1.0, 0, 0.35]}
-        rotation={[Math.PI / 2, 0, 0.25]}
-      />
+        <Model url={BOOK_URL} target={0.5} position={[1.05, 0, 0.3]} rotation={[0, -0.4, 0]} />
+        <Model
+          url={PENCIL_URL}
+          target={0.62}
+          position={[-1.0, 0, 0.35]}
+          rotation={[Math.PI / 2, 0, 0.25]}
+        />
 
-      {/* Bóng tiếp xúc đậm trên mặt bàn → vật thể nổi khối, "đặt" chứ không lơ lửng. */}
-      <ContactShadows
-        position={[0, 0.001, 0]}
-        opacity={0.85}
-        scale={7}
-        blur={2.2}
-        far={1.3}
-      />
+        <ContactShadows
+          position={[0, 0.001, 0]}
+          opacity={0.85}
+          scale={7}
+          blur={2.2}
+          far={1.3}
+        />
+      </group>
     </group>
   );
 }
@@ -232,9 +251,6 @@ export default function Scene3D() {
     >
       <color attach="background" args={["#0d0d11"]} />
 
-      {/* Ánh sáng editorial tối: ambient rất yếu (để bóng đậm, nổi khối) +
-          key light từ TRÊN CAO chiếu gần như thẳng xuống mặt bàn (hơi nghiêng về
-          phía camera để bóng đổ ra trước, thấy được độ sâu). */}
       <ambientLight intensity={0.18} />
       <directionalLight
         castShadow
@@ -243,21 +259,8 @@ export default function Scene3D() {
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0005}
       >
-        <orthographicCamera
-          attach="shadow-camera"
-          args={[-6, 6, 6, -6, 0.1, 30]}
-        />
+        <orthographicCamera attach="shadow-camera" args={[-6, 6, 6, -6, 0.1, 30]} />
       </directionalLight>
-
-      {/* Sàn phòng tối hứng bóng chân bàn — chiều sâu phối cảnh như template. */}
-      <mesh
-        position={[0, -1.75, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[40, 40]} />
-        <meshStandardMaterial color="#16161d" roughness={1} />
-      </mesh>
 
       <Suspense
         fallback={

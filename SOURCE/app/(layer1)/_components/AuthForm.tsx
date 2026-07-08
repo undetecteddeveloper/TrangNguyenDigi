@@ -4,8 +4,12 @@
 import { useActionState, useState } from "react";
 import { signIn, signUp, type AuthState } from "../actions";
 
-export function AuthForm() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+export function AuthForm({
+  initialMode = "signin",
+}: {
+  initialMode?: "signin" | "signup";
+}) {
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const action = mode === "signin" ? signIn : signUp;
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     action,

@@ -21,6 +21,13 @@ interface ExamFiltersProps {
   selected: { subject?: string; grade?: number };
 }
 
+// Lọc nhanh — 3 ô checkbox NGOÀI dropdown, xếp dọc. Chưa gắn hành vi (để sau).
+const QUICK = [
+  { value: "newest", label: "Mới nhất" },
+  { value: "oldest", label: "Cũ nhất" },
+  { value: "hardest", label: "Khó nhất" },
+];
+
 // rgba khai báo tường minh trong source (theo #Yêu cầu) để làm nổi bật *Filter:
 const PANEL_BG = "rgba(255, 255, 255, 0.98)"; // sheet trắng nổi trên nền giấy
 const OPTIONS_BG = "rgba(255, 255, 255, 0.99)"; // bảng chọn của từng filter
@@ -153,6 +160,22 @@ export function ExamFilters({ subjects, grades, selected }: ExamFiltersProps) {
               )}
             </div>
           )}
+
+          {/* Lọc nhanh — 3 ô CHECKBOX (chưa gắn hành vi). Mép phải mỗi ô canh
+              đúng viền phải tay nắm: đặt absolute right-0 trong .relative
+              (right-0 = mép phải handle = đường kẻ). w-max nới text sang TRÁI,
+              checkbox luôn ghim mép phải nên cả 3 ô thẳng hàng trên đường kẻ. */}
+          <div className="absolute right-0 top-full mt-3 flex w-max flex-col gap-2">
+            {QUICK.map((q) => (
+              <label
+                key={q.value}
+                className="flex cursor-pointer items-center justify-between gap-2 whitespace-nowrap text-sm text-foreground"
+              >
+                {q.label}
+                <input type="checkbox" className="size-4 accent-brand" />
+              </label>
+            ))}
+          </div>
         </div>
       </div>
     </>

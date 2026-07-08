@@ -138,15 +138,20 @@
   --block-hover: var(--brand);
 }
 
-/* Theme: Exam Browser Page (/exams) — Layer 2.
-   Navbar RGB(26,54,93) · nền/shadow dark (kế thừa root) ·
-   block RGB(47,133,90) · hover RGB(255,249,69) · chữ trắng. */
-.theme-ebp {
+/* Theme: TẤT CẢ trang UI Layer 2 — navbar Navy Blue RGB(26,54,93).
+   Áp qua app/(layer2)/layout.tsx → mọi trang L2 (Browser, Detail, Player,
+   Result, Detail-câu) đều có navbar navy. Một nguồn duy nhất cho cả L2. */
+.theme-l2 {
   --nav-bg: rgb(26 54 93 / 0.95);
   --nav-border: rgb(255 255 255 / 0.14);
   --nav-fg: #ffffff;
   --nav-fg-muted: rgb(255 255 255 / 0.82);
+}
 
+/* Theme: Exam Browser Page (/exams) — Layer 2.
+   Navbar navy thừa hưởng từ .theme-l2 (cha). Riêng EBP còn:
+   block RGB(47,133,90) · hover RGB(255,249,69) · chữ trắng. */
+.theme-ebp {
   --block-bg: rgb(47 133 90);
   --block-fg: #ffffff;
   --block-fg-muted: rgb(255 255 255 / 0.8);

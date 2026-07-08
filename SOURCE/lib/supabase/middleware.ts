@@ -34,9 +34,15 @@ export async function updateSession(request: NextRequest) {
 
   // QUAN TRỌNG: getUser() phải được gọi để refresh token. Không chèn code giữa
   // createServerClient và getUser() — dễ gây lỗi đăng xuất ngẫu nhiên.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Bọc try/catch: nếu backend Supabase không kết nối được (project paused/
+  // deleted, mạng), coi như chưa đăng nhập thay vì để mọi request 500.
+  let user = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch (err) {
+    console.warn("[updateSession] Supabase auth không kết nối được:", err);
+  }
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some(
