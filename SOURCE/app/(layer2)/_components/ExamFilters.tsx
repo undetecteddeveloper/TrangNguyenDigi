@@ -28,10 +28,11 @@ const QUICK = [
   { value: "hardest", label: "Khó nhất" },
 ];
 
-// rgba khai báo tường minh trong source (theo #Yêu cầu) để làm nổi bật *Filter:
-const PANEL_BG = "rgba(255, 255, 255, 0.98)"; // sheet trắng nổi trên nền giấy
-const OPTIONS_BG = "rgba(255, 255, 255, 0.99)"; // bảng chọn của từng filter
-const SCRIM_BG = "rgba(20, 20, 20, 0.08)"; // dim exam list khi *Filter mở
+// rgba khai báo tường minh trong source (theo #Yêu cầu) để làm nổi bật *Filter.
+// Tông ngà #EDE1C8 theo theme Mực & Sơn mài (S#17) thay trắng thuần.
+const PANEL_BG = "rgba(237, 225, 200, 0.98)"; // sheet ngà nổi trên nền trang
+const OPTIONS_BG = "rgba(237, 225, 200, 0.99)"; // bảng chọn của từng filter
+const SCRIM_BG = "rgba(27, 21, 18, 0.08)"; // dim exam list khi *Filter mở
 
 export function ExamFilters({ subjects, grades, selected }: ExamFiltersProps) {
   const router = useRouter();
@@ -83,7 +84,7 @@ export function ExamFilters({ subjects, grades, selected }: ExamFiltersProps) {
             aria-label="Bộ lọc"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="flex flex-col items-center gap-2 rounded-md border-r border-border py-4 pl-3 pr-2.5 transition-all duration-200 hover:shadow-[0_8px_24px_rgba(255,255,255,0.15)]"
+            className="flex flex-col items-center gap-2 rounded-md border-r border-border py-4 pl-3 pr-2.5 transition-colors duration-200 hover:bg-accent"
           >
             <span className="relative">
               <Triangle open={open} />

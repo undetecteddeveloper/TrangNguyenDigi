@@ -6,7 +6,7 @@ export function ExamCard({ exam }: { exam: Exam }) {
     <li className="h-full">
       <Link
         href={`/exams/${exam.id}`}
-        className="group flex h-full flex-col gap-3 rounded-lg border border-[color:var(--block-border)] bg-[var(--block-bg)] p-5 transition-all duration-200 hover:border-[color:var(--block-hover)] hover:shadow-[0_8px_24px_rgba(255,255,255,0.35)] focus-visible:border-[color:var(--block-hover)] focus-visible:outline-none"
+        className="group flex h-full flex-col gap-3 rounded-lg border border-[color:var(--block-border)] bg-[var(--block-bg)] p-5 transition-colors duration-200 hover:border-[color:var(--block-hover)] focus-visible:border-[color:var(--block-hover)] focus-visible:outline-none"
       >
         <div className="flex items-baseline justify-between gap-3">
           <span className="eyebrow text-[var(--block-fg-muted)]">

@@ -83,7 +83,7 @@ export default async function ResultDetailPage({
                     const badgeCls = isCorrect
                       ? "border-brand bg-brand text-brand-foreground"
                       : isSelectedWrong
-                        ? "border-destructive bg-destructive text-white"
+                        ? "border-destructive bg-destructive text-brand-foreground"
                         : "border-border text-muted-foreground";
 
                     return (

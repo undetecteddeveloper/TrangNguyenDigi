@@ -42,11 +42,11 @@ export async function signIn(
   redirect("/exams");
 }
 
-/** Đăng xuất, quay về trang login. */
+/** Đăng xuất, quay về homepage với form đăng nhập mở. */
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/login");
+  redirect("/?auth=signin");
 }
 
 /** Đổi tên hiển thị (user_profiles.display_name) — gọi từ AccountMenu (dropdown

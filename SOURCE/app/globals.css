@@ -9,10 +9,10 @@
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-serif: var(--font-merriweather);
+  --font-sans: var(--font-be-vietnam);
+  --font-serif: var(--font-source-serif);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-merriweather);
+  --font-heading: var(--font-source-serif);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -52,44 +52,46 @@
 }
 
 :root {
-  /* Dark theme = ROOT: nền/chữ/shadow đảo ngược (đen <-> trắng) từ bản "tờ giấy
-     trắng" cũ. Toàn bộ Layer NGOÀI L1 (L2/L3/L4) dựa vào (based on) root này;
-     L1 (homepage 3D) có nền riêng, không phụ thuộc các biến này. */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  /* Accent duy nhất — mực chàm sáng (tương phản đủ trên nền tối). */
-  --brand: oklch(0.62 0.12 264);
-  --brand-foreground: oklch(0.15 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Theme "Mực & Sơn mài" (DESIGN.md) = ROOT — MỘT theme đồng bộ cho MỌI UI
+     Layer (S#17, thay dark root cũ). Nền ngà (trang giấy cũ), chữ đen sơn mài
+     (đen ấm), đỏ son cho hành động chính, vàng đồng cho kẻ/viền/focus. Không
+     đổ bóng/gradient — phân lớp bằng màu nền + hairline border. */
+  --background: #ede1c8;
+  --foreground: #1b1512;
+  --card: #ede1c8;
+  --card-foreground: #1b1512;
+  /* Accent hành động duy nhất — đỏ son (DESIGN.md primary). */
+  --brand: #a62c2b;
+  --brand-foreground: #ede1c8;
+  --popover: #ede1c8;
+  --popover-foreground: #1b1512;
+  --primary: #a62c2b;
+  --primary-foreground: #ede1c8;
+  --secondary: #e3d5b6;
+  --secondary-foreground: #1b1512;
+  --muted: #e3d5b6;
+  --muted-foreground: #6b655c;
+  --accent: #e3d5b6;
+  --accent-foreground: #1b1512;
+  --destructive: #8f2523;
+  --border: #d8c9a8;
+  --input: #d8c9a8;
+  /* Focus ring = vàng đồng (DESIGN.md accent — viền/underline, không phủ mảng). */
+  --ring: #b8863b;
+  --chart-1: #a62c2b;
+  --chart-2: #b8863b;
+  --chart-3: #6b655c;
+  --chart-4: #1b1512;
+  --chart-5: #d8c9a8;
   --radius: 0.625rem;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #1b1512;
+  --sidebar-foreground: #ede1c8;
+  --sidebar-primary: #a62c2b;
+  --sidebar-primary-foreground: #ede1c8;
+  --sidebar-accent: #b8863b;
+  --sidebar-accent-foreground: #1b1512;
+  --sidebar-border: rgb(237 225 200 / 0.12);
+  --sidebar-ring: #b8863b;
 }
 
 @layer base {
@@ -110,9 +112,9 @@
     @apply font-serif;
     text-wrap: balance;
   }
-  /* Nhãn nhỏ dạng small-caps tracked — chất editorial (đồng bộ homepage). */
+  /* Nhãn nhỏ dạng small-caps tracked — label-caps DESIGN.md (Be Vietnam Pro). */
   .eyebrow {
-    @apply font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground;
+    @apply font-sans text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground;
   }
 }
 
@@ -125,36 +127,17 @@
    nơi NGOÀI scope. "Chỉ đổi theme, không đổi thiết kế."
    ============================================================ */
 :root {
-  /* Navbar (SiteHeader) */
-  --nav-bg: color-mix(in srgb, var(--background) 90%, transparent);
-  --nav-border: var(--border);
-  --nav-fg: var(--foreground);
-  --nav-fg-muted: var(--muted-foreground);
+  /* Navbar (SiteHeader) — đen sơn mài "đảo ngược" trên nền ngà (DESIGN.md
+     surface), đồng bộ với sidebar homepage. Một navbar cho mọi layer (S#17 —
+     đã xóa .theme-l2 navy + .theme-ebp block xanh vì mâu thuẫn theme mới). */
+  --nav-bg: rgb(27 21 18 / 0.97);
+  --nav-border: rgb(237 225 200 / 0.14);
+  --nav-fg: #ede1c8;
+  --nav-fg-muted: rgb(237 225 200 / 0.75);
   /* Block nội dung (ExamCard) */
   --block-bg: var(--card);
   --block-fg: var(--card-foreground);
   --block-fg-muted: var(--muted-foreground);
   --block-border: var(--border);
   --block-hover: var(--brand);
-}
-
-/* Theme: TẤT CẢ trang UI Layer 2 — navbar Navy Blue RGB(26,54,93).
-   Áp qua app/(layer2)/layout.tsx → mọi trang L2 (Browser, Detail, Player,
-   Result, Detail-câu) đều có navbar navy. Một nguồn duy nhất cho cả L2. */
-.theme-l2 {
-  --nav-bg: rgb(26 54 93 / 0.95);
-  --nav-border: rgb(255 255 255 / 0.14);
-  --nav-fg: #ffffff;
-  --nav-fg-muted: rgb(255 255 255 / 0.82);
-}
-
-/* Theme: Exam Browser Page (/exams) — Layer 2.
-   Navbar navy thừa hưởng từ .theme-l2 (cha). Riêng EBP còn:
-   block RGB(47,133,90) · hover RGB(255,249,69) · chữ trắng. */
-.theme-ebp {
-  --block-bg: rgb(47 133 90);
-  --block-fg: #ffffff;
-  --block-fg-muted: rgb(255 255 255 / 0.8);
-  --block-border: rgb(255 255 255 / 0.18);
-  --block-hover: rgb(255 249 69);
 }

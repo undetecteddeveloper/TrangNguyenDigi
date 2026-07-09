@@ -28,9 +28,9 @@ export default async function ExamsPage({
   ]);
 
   return (
-    // Scope theme EBP: override biến --nav-*/--block-* (globals.css). Nền dark
-    // kế thừa root (bg-background) — đúng yêu cầu "Layer ngoài L1 dựa vào root".
-    <div className="theme-ebp bg-background">
+    // Theme root "Mực & Sơn mài" (S#17) — scope .theme-ebp đã xóa, block/nav
+    // lấy từ biến mặc định ở :root (globals.css).
+    <div className="bg-background">
       <main className="mx-auto w-full max-w-3xl">
         {/* MỘT block căn giữa: *Filter (trái, sticky, overlay) + lưới ExamCard
             2 cột × n hàng (phải, flex-1). mx-auto của <main> giữ block căn giữa. */}

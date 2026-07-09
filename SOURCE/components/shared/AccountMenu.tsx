@@ -1,7 +1,7 @@
 "use client";
 
-// AccountMenu — dropdown "Tài khoản" DÙNG CHUNG cho mọi UI Layer (HomeHeader L1
-// + SiteHeader L2/3/4). Module IAM (Logic Layer 1):
+// AccountMenu — dropdown "Tài khoản" DÙNG CHUNG cho mọi UI Layer (SiteHeader
+// L2/3/4; L1 dùng ô account riêng trong HomeSidebar). Module IAM (Logic Layer 1):
 //  - Chưa đăng nhập: giữ nguyên hành vi cũ — Đăng ký / Đăng nhập.
 //  - Đã đăng nhập: avatar (icon blank-user-circles, ASSETS/images) thay chữ
 //    "Tài khoản" → dropdown CĂN GIỮA gồm tên hiện tại, "Chỉnh sửa" (đổi tên
@@ -73,11 +73,11 @@ export function AccountMenu({ user }: { user: MenuUser | null }) {
             />
             <div
               role="menu"
-              className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-sm"
+              className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-lg border border-border bg-card py-1"
             >
               <Link
                 role="menuitem"
-                href="/login?mode=signup"
+                href="/?auth=signup"
                 onClick={close}
                 className="block px-4 py-2 text-sm text-foreground transition-colors hover:bg-accent"
               >
@@ -85,7 +85,7 @@ export function AccountMenu({ user }: { user: MenuUser | null }) {
               </Link>
               <Link
                 role="menuitem"
-                href="/login"
+                href="/?auth=signin"
                 onClick={close}
                 className="block px-4 py-2 text-sm text-foreground transition-colors hover:bg-accent"
               >
@@ -127,7 +127,7 @@ export function AccountMenu({ user }: { user: MenuUser | null }) {
           />
           <div
             role="menu"
-            className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-sm"
+            className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-lg border border-border bg-card p-1"
           >
             {!editing ? (
               <>

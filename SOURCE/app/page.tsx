@@ -1,25 +1,83 @@
-import { HomeHeader } from "@/app/(layer1)/_components/HomeHeader";
-import { HomepageStage } from "@/app/(layer1)/_components/HomepageStage";
+import { redirect } from "next/navigation";
+import { HomeSidebar } from "@/app/(layer1)/_components/HomeSidebar";
+import { HomeStage, type AuthMode } from "@/app/(layer1)/_components/HomeStage";
 import { getCurrentUserProfile } from "@/lib/auth/getCurrentUser";
 
-// Homepage (Layer 1 — Entry). Sân khấu editorial tối theo
-// TEMPLATE/homepage/homepage_desktop.png. Navbar riêng L1 (HomeHeader): "Về
-// chúng tôi" + "Tài khoản" (Đăng ký/Đăng nhập). HomepageStage chọn nhánh: desktop (≥1024px + WebGL) → scene
-// 3D Three.js (M3.3); mobile/tablet → fallback 2.5D computer.png trên bàn CSS
-// (M3.4) — three KHÔNG nạp trên mobile. Bấm máy / CTA → /exams (proxy đẩy /login
-// nếu chưa auth).
-export default async function Home() {
-  const user = await getCurrentUserProfile();
+// Homepage (Layer 1 — Entry). Bố cục theo template Hyperspace (HTML5 UP):
+// sidebar nav dọc bên trái + content area bên phải. Theme "Mực & Sơn mài"
+// (DESIGN.md): sidebar đen sơn mài #1B1512 · content nền ngà #EDE1C8.
+//
+// S#17: content area có HAI trạng thái — hero và form auth — swap bằng
+// transition ngay trong trang (không tách page /login riêng). URL sync qua
+// `?auth=signin|signup` để deep-link và middleware redirect hoạt động;
+// logic swap nằm trong HomeStage (client). Toàn bộ nội dung tiếng Anh.
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ auth?: string }>;
+}) {
+  // Fetch user cho ô account đáy sidebar (avatar + tên). Đọc cookie auth mỗi
+  // request → `/` là dynamic (ƒ), đánh đổi hợp lý cho cá nhân hoá.
+  const [{ auth }, user] = await Promise.all([
+    searchParams,
+    getCurrentUserProfile(),
+  ]);
+
+  const authMode: AuthMode =
+    auth === "signup" ? "signup" : auth === "signin" ? "signin" : null;
+
+  // Đã đăng nhập mà mở form auth → vào thẳng /exams (parity với /login cũ).
+  if (user && authMode) redirect("/exams");
 
   return (
-    // Container khóa đúng 1 viewport (h-[100dvh]) + overflow-hidden → không
-    // scrollbar dọc (header có border-b 1px nên tránh tính calc thủ công).
-    // Header trong flow + main flex-1 min-h-0 cho Canvas WebGL chiều cao xác định.
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0d0d11]">
-      <HomeHeader user={user} />
-      <main className="relative min-h-0 flex-1">
-        <HomepageStage />
+    // h-dvh + overflow-hidden: trang KHÔNG cuộn (S#17 vòng sửa 1) — toàn bộ
+    // homepage nằm gọn trong viewport. Content area tự cuộn NỘI BỘ
+    // (overflow-y-auto) chỉ khi màn quá thấp, để không bị cắt nội dung.
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#1B1512] lg:flex-row">
+      <HomeSidebar user={user} authOpen={authMode !== null} />
+
+      <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#EDE1C8] px-6 py-8 sm:px-12 lg:px-16 lg:py-10">
+        <HeroLines />
+        {/* HomeStage có my-auto → tự căn giữa dọc khi content thấp hơn khung. */}
+        <HomeStage auth={authMode} />
       </main>
     </div>
+  );
+}
+
+// Hoa văn đường kẻ hình học mờ trên nền content area (tái hiện texture của
+// template). Hairline phẳng (không gradient/bóng), màu đen sơn mài opacity
+// thấp — đúng tinh thần "flat + hairline" của DESIGN.md. vector-effect giữ nét
+// 1px dù SVG bị kéo giãn không đồng đều (preserveAspectRatio=none).
+function HeroLines() {
+  const lines = [
+    [0, 18, 100, 2],
+    [0, 55, 100, 30],
+    [20, 0, 80, 100],
+    [60, 0, 100, 70],
+    [0, 90, 70, 100],
+    [0, 100, 100, 45],
+  ];
+  return (
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      preserveAspectRatio="none"
+      viewBox="0 0 100 100"
+    >
+      {lines.map(([x1, y1, x2, y2], i) => (
+        <line
+          key={i}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke="#1B1512"
+          strokeOpacity="0.06"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </svg>
   );
 }

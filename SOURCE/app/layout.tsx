@@ -1,25 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import localFont from "next/font/local";
+import { Geist_Mono, Source_Serif_4, Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin", "latin-ext"],
+// Font theo DESIGN.md ("Mực & Sơn mài") — đồng bộ TOÀN site (S#17):
+// Source Serif 4 cho display/h1/h2/quote (--font-serif/--font-heading),
+// Be Vietnam Pro cho body/label-caps (--font-sans). Geist Mono giữ cho
+// --font-mono (timer MM:SS, nhãn chữ cái A/B/C/D). Merriweather + Geist Sans
+// đã gỡ khỏi bundle (TTF Merriweather vẫn nằm trong ASSETS/fonts).
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
+  subsets: ["latin", "vietnamese"],
+});
+
+const beVietnamPro = Be_Vietnam_Pro({
+  variable: "--font-be-vietnam",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin", "latin-ext"],
-});
-
-// Merriweather (serif) — font đọc cho Layer 2 "tờ giấy trắng / focused".
-// Variable font sống trong ASSETS/ theo UI-LAYER-MAP Mục 11 (không copy vào public).
-const merriweather = localFont({
-  src: "../../ASSETS/fonts/Merriweather-VariableFont_opsz,wdth,wght.ttf",
-  variable: "--font-merriweather",
-  weight: "300 900",
-  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -35,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
-      className={`${geistSans.variable} ${geistMono.variable} ${merriweather.variable} h-full antialiased`}
+      className={`${geistMono.variable} ${sourceSerif.variable} ${beVietnamPro.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

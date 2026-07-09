@@ -1,7 +1,6 @@
-// Layout route group (layer2) — áp theme L2 cho MỌI trang Layer 2.
-// Mục đích: navbar Navy Blue (RGB 26,54,93) cho tất cả trang L2 (Exam Browser,
-// Detail, Player, Result, Detail-câu). Biến --nav-* nằm trong .theme-l2
-// (globals.css) → các trang con thừa hưởng, không cần lặp ở từng trang.
+// Layout route group (layer2) — khung chung cho MỌI trang Layer 2.
+// Theme dùng thẳng root "Mực & Sơn mài" (globals.css, S#17) — không còn scope
+// .theme-l2 riêng; navbar đen sơn mài lấy từ biến --nav-* mặc định.
 //
 // SiteHeader render Ở ĐÂY (1 lần cho mọi trang L2) thay vì lặp lại trong từng
 // page — tránh phải truyền `user` prop xuyên qua ExamPlayer (client component)
@@ -20,7 +19,7 @@ export default async function Layer2Layout({
   const user = await getCurrentUserProfile();
 
   return (
-    <div className="theme-l2 min-h-dvh">
+    <div className="min-h-dvh">
       <SiteHeader user={user} />
       {children}
     </div>

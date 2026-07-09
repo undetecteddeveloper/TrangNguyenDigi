@@ -49,10 +49,12 @@ export async function updateSession(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
-  // Chưa đăng nhập + route cần bảo vệ → redirect /login.
+  // Chưa đăng nhập + route cần bảo vệ → về homepage với form auth mở
+  // (auth nằm trong content area của `/` từ S#17, không còn page /login riêng).
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
+    url.search = "?auth=signin";
     return NextResponse.redirect(url);
   }
 

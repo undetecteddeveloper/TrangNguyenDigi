@@ -1,11 +1,11 @@
 "use client";
 
 // SiteHeader — navbar DÙNG CHUNG cho UI Layer 2/3/4 (KHÔNG dùng cho L1 — L1 có
-// HomeHeader riêng). Các thẻ nav độc lập: "Phân tích" (→ L3), "Nhập đề" (→ L4).
+// HomeSidebar riêng). Các thẻ nav độc lập: "Phân tích" (→ L3), "Nhập đề" (→ L4).
 // "Tài khoản" dùng AccountMenu dùng chung (components/shared) — chưa đăng
 // nhập: Đăng ký/Đăng nhập; đã đăng nhập: avatar + Chỉnh sửa/Đăng xuất. Nền
-// theo token --nav-* (navy ở L2 qua .theme-l2; L3/L4 khi build sẽ bọc theme
-// tương tự để đồng bộ). `user` được fetch 1 lần ở (layer2)/layout.tsx.
+// theo token --nav-* mặc định ở :root (đen sơn mài — theme Mực & Sơn mài đồng
+// bộ toàn site, S#17). `user` được fetch 1 lần ở (layer2)/layout.tsx.
 
 import Link from "next/link";
 import { AccountMenu, type MenuUser } from "@/components/shared/AccountMenu";
