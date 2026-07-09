@@ -13,6 +13,11 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-[color:var(--nav-border)] bg-[var(--nav-bg)] backdrop-blur">
+      {/* Bố cục header = 2 item ngang hàng cho flexbox: logo (item 1) và
+          TOÀN BỘ khối nav (item 2, một block duy nhất) — justify-between đẩy
+          2 item ra 2 mép (chỉ còn padding container, không có khoảng đệm dư
+          thừa) — đúng chuẩn phổ biến (vd navbar Google: logo sát trái, nav
+          sát phải). */}
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6">
         <Link
           href="/"
@@ -21,31 +26,35 @@ export function SiteHeader() {
           Trạng Nguyên
         </Link>
 
-        <nav className="flex items-center gap-6">
+        {/* Khối nav — một item duy nhất ở cấp header. Bên trong, các thẻ
+            con dùng gap chuẩn phổ biến (rem, không stretch/justify-around
+            trên toàn header). Mỗi thẻ vẫn rộng 8vw ở desktop (min 5.5rem)
+            — yêu cầu "thẻ nav = 8% chiều dài màn hình". */}
+        <nav className="flex items-center gap-6 sm:gap-8">
           {/* Thẻ <a> độc lập — Phân tích (Layer 3) + Nhập đề (Layer 4). */}
           <Link
             href="/me/dashboard"
-            className="eyebrow text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)]"
+            className="eyebrow flex items-center justify-center whitespace-nowrap text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)] max-sm:text-[10px] max-sm:tracking-[0.04em] sm:w-[8vw] sm:min-w-[5.5rem]"
           >
             Phân tích
           </Link>
           <Link
             href="/admin/import"
-            className="eyebrow text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)]"
+            className="eyebrow flex items-center justify-center whitespace-nowrap text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)] max-sm:text-[10px] max-sm:tracking-[0.04em] sm:w-[8vw] sm:min-w-[5.5rem]"
           >
             Nhập đề
           </Link>
 
           {/* Tài khoản — dropdown: Đăng ký / Đăng nhập. */}
-          <div className="relative">
+          <div className="relative sm:w-[8vw] sm:min-w-[5.5rem]">
             <button
               type="button"
               aria-haspopup="menu"
               aria-expanded={acctOpen}
               onClick={() => setAcctOpen((v) => !v)}
-              className="flex items-center gap-2 py-2"
+              className="flex w-full items-center justify-center gap-2 whitespace-nowrap py-2"
             >
-              <span className="eyebrow text-[var(--nav-fg-muted)]">
+              <span className="eyebrow text-[var(--nav-fg-muted)] max-sm:text-[10px] max-sm:tracking-[0.04em]">
                 Tài khoản
               </span>
               <svg

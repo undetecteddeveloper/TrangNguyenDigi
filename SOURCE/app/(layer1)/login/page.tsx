@@ -1,7 +1,9 @@
-// UI Layer 1 — Trang đăng nhập / đăng ký (GĐ 2 M2.4).
-// User đã đăng nhập thì chuyển thẳng vào /exams.
+// UI Layer 1 — Trang đăng nhập / đăng ký (GĐ 3 Polish, S#15).
+// Navbar KẾ THỪA HomeHeader của homepage (cùng world Entry). Card trắng/đen
+// (AuthForm) căn giữa trên nền tối L1 #0d0d11. User đã đăng nhập → /exams.
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
+import { HomeHeader } from "../_components/HomeHeader";
 import { AuthForm } from "../_components/AuthForm";
 
 export default async function LoginPage({
@@ -15,8 +17,11 @@ export default async function LoginPage({
   const { mode } = await searchParams;
 
   return (
-    <main>
-      <AuthForm initialMode={mode === "signup" ? "signup" : "signin"} />
-    </main>
+    <div className="flex min-h-[100dvh] flex-col bg-[#0d0d11]">
+      <HomeHeader />
+      <main className="flex flex-1 items-center justify-center px-4 py-10">
+        <AuthForm initialMode={mode === "signup" ? "signup" : "signin"} />
+      </main>
+    </div>
   );
 }
