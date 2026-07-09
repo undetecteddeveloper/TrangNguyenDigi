@@ -7,7 +7,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getResult } from "@/app/(layer2)/queries";
-import { SiteHeader } from "@/app/(layer2)/_components/SiteHeader";
 import { RichText } from "@/components/shared/RichText";
 
 export default async function ResultDetailPage({
@@ -26,9 +25,7 @@ export default async function ResultDetailPage({
   const resultHref = `/exams/${examId}/attempt/${attemptId}/result`;
 
   return (
-    <div className="min-h-dvh bg-background">
-      <SiteHeader />
-
+    <div className="bg-background">
       <main className="mx-auto w-full max-w-2xl px-6 py-8">
         <header className="flex flex-col gap-2">
           <span className="eyebrow">Chi tiết bài làm</span>

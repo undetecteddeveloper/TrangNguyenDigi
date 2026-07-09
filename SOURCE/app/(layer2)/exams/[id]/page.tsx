@@ -7,7 +7,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getExam } from "@/app/(layer2)/queries";
-import { SiteHeader } from "@/app/(layer2)/_components/SiteHeader";
 import { StartAttemptButton } from "@/app/(layer2)/_components/StartAttemptButton";
 
 export default async function ExamDetailPage({
@@ -23,9 +22,7 @@ export default async function ExamDetailPage({
   }
 
   return (
-    <div className="min-h-dvh bg-background">
-      <SiteHeader />
-
+    <div className="bg-background">
       <main className="mx-auto flex w-full max-w-xl flex-col px-6 py-10">
         {/* "Trang trước" canh TRÁI block tổng quan (self-start), nội dung dưới căn giữa. */}
         <Link

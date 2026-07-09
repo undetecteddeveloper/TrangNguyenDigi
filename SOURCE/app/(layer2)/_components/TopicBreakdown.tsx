@@ -8,13 +8,13 @@ export function TopicBreakdown({ topics }: { topics: TopicResult[] }) {
   if (topics.length === 0) return null;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
-      <span className="eyebrow">Theo chủ đề</span>
-      <ul className="mt-4 flex flex-col gap-4">
+    <section className="rounded-xl border border-border bg-card p-4">
+      <span className="eyebrow">Chủ đề</span>
+      <ul className="mt-3 flex flex-col gap-3">
         {topics.map((t) => {
           const pct = t.total > 0 ? (t.correct / t.total) * 100 : 0;
           return (
-            <li key={t.topic} className="flex flex-col gap-1.5">
+            <li key={t.topic} className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-sm text-foreground">Câu {t.topic}</span>
                 <span className="font-mono text-xs text-muted-foreground tabular-nums">

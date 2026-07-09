@@ -10,7 +10,6 @@
 import { listExams, listExamFacets } from "@/app/(layer2)/queries";
 import { ExamBrowser } from "@/app/(layer2)/_components/ExamBrowser";
 import { ExamFilters } from "@/app/(layer2)/_components/ExamFilters";
-import { SiteHeader } from "@/app/(layer2)/_components/SiteHeader";
 
 type SearchParams = Promise<{ subject?: string; grade?: string }>;
 
@@ -31,9 +30,7 @@ export default async function ExamsPage({
   return (
     // Scope theme EBP: override biến --nav-*/--block-* (globals.css). Nền dark
     // kế thừa root (bg-background) — đúng yêu cầu "Layer ngoài L1 dựa vào root".
-    <div className="theme-ebp min-h-dvh bg-background">
-      <SiteHeader />
-
+    <div className="theme-ebp bg-background">
       <main className="mx-auto w-full max-w-3xl">
         {/* MỘT block căn giữa: *Filter (trái, sticky, overlay) + lưới ExamCard
             2 cột × n hàng (phải, flex-1). mx-auto của <main> giữ block căn giữa. */}

@@ -7,7 +7,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getResult } from "@/app/(layer2)/queries";
-import { SiteHeader } from "@/app/(layer2)/_components/SiteHeader";
 import { ScoreCard } from "@/app/(layer2)/_components/ScoreCard";
 import { TopicBreakdown } from "@/app/(layer2)/_components/TopicBreakdown";
 import { ResultActions } from "@/app/(layer2)/_components/ResultActions";
@@ -27,24 +26,24 @@ export default async function ResultPage({
   const { examTitle, result } = data;
 
   return (
-    <div className="min-h-dvh bg-background">
-      <SiteHeader />
-
+    <div className="bg-background">
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-6 py-8">
         <ScoreCard examTitle={examTitle} result={result} />
 
-        {/* Chủ đề (trái) · Save/Share trên + Trang chủ dưới (phải) — bố cục template:
-            save/share canh đỉnh, "Trang chủ" canh đáy block chủ đề (justify-between). */}
+        {/* Chủ đề (trái) · Lưu/Chia sẻ + Trở về (phải) — engineer feedback: đổi
+            justify-between → justify-start (gap-3 cố định) để 2 nhóm nút bên
+            phải nằm SÁT nhau ngay dưới nhau, không bị kéo giãn hở khoảng
+            trống theo chiều cao (do items-stretch khớp cột trái cao hơn). */}
         <div className="grid grid-cols-[1fr_auto] items-stretch gap-4">
           <TopicBreakdown topics={result.topicBreakdown} />
-          <div className="flex w-28 flex-col justify-between gap-3 sm:w-36">
+          <div className="flex w-28 flex-col justify-start gap-3 sm:w-36">
             <ResultActions />
             {/* Trở về homepage → "/" (placeholder; homepage thật ở UI L1 — Q4). */}
             <Link
               href="/"
               className="flex items-center justify-center rounded-xl border border-border bg-card px-3 py-4 text-center text-sm text-foreground transition-colors hover:border-brand"
             >
-              Trang chủ
+              Trở về
             </Link>
           </div>
         </div>

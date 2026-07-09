@@ -4,8 +4,8 @@
 // Visual "tờ giấy trắng": card hairline, KHÔNG fill màu (màu template tượng trưng, Q6).
 
 const ACTIONS = [
-  { key: "save", label: "save" },
-  { key: "share", label: "share" },
+  { key: "save", label: "Lưu" },
+  { key: "share", label: "Chia sẻ" },
 ] as const;
 
 export function ResultActions() {

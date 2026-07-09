@@ -48,3 +48,31 @@ export async function signOut() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+/** Đổi tên hiển thị (user_profiles.display_name) — gọi từ AccountMenu (dropdown
+ * navbar). RLS "profiles_update_own" đã cho phép user tự sửa profile của mình. */
+export async function updateProfile(
+  _prev: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  const displayName = String(formData.get("displayName") ?? "").trim();
+  if (!displayName) return { error: "Tên hiển thị không được để trống" };
+  if (displayName.length > 12)
+    return { error: "Tên hiển thị tối đa 12 ký tự" };
+  if (!/^[\p{L}.]+$/u.test(displayName))
+    return { error: "Tên hiển thị chỉ được chứa chữ cái và dấu chấm" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Phiên đăng nhập đã hết hạn" };
+
+  const { error } = await supabase
+    .from("user_profiles")
+    .update({ display_name: displayName })
+    .eq("id", user.id);
+
+  if (error) return { error: error.message };
+  return null;
+}

@@ -2,14 +2,14 @@
 // Giữ state làm bài qua useExamPlayer (useReducer — tracer code M1.5): câu, đáp án, flag.
 // Nộp bài gọi submitExam() Server Action (batch on submit, Q2=A) — action tự redirect.
 // Task 3: ExamTimer đếm ngược → hết giờ auto-submit (PA A); FlagButton đánh dấu câu.
-// Visual "focus mode" (UI-LAYER-MAP 4.2): SiteHeader + top bar sticky (timer · tên đề ·
-// flag), nội dung căn giữa cột hẹp, không sidebar/distraction.
+// Visual "focus mode" (UI-LAYER-MAP 4.2): SiteHeader (từ (layer2)/layout.tsx,
+// KHÔNG render ở đây) + top bar sticky (timer · tên đề · flag), nội dung căn
+// giữa cột hẹp, không sidebar/distraction.
 // M3.2 Task 1: mobile vuốt trái/phải chuyển câu (useSwipe); desktop dùng phím ← → .
 "use client";
 
 import { useEffect, useRef, useTransition } from "react";
 import { submitExam } from "@/app/(layer2)/actions";
-import { SiteHeader } from "./SiteHeader";
 import { ExamTimer } from "./ExamTimer";
 import { FlagButton } from "./FlagButton";
 import { QuestionRenderer } from "./QuestionRenderer";
@@ -72,9 +72,7 @@ export function ExamPlayer({
   }
 
   return (
-    <div className="min-h-dvh bg-background">
-      <SiteHeader />
-
+    <div className="bg-background">
       {/* Top bar — timer · tên đề (giữa) · flag, sticky ngay dưới SiteHeader (h-14). */}
       <div className="sticky top-14 z-20 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto grid h-12 w-full max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-6">
