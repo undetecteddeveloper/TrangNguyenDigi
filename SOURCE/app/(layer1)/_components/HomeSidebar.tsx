@@ -41,7 +41,8 @@ export function HomeSidebar({
   const activeLabel = authOpen ? "Account" : "Home";
 
   return (
-    <aside className="flex shrink-0 flex-col bg-[#1B1512] lg:sticky lg:top-0 lg:h-dvh lg:w-80">
+    // preload order 0 — sidebar là khối trên cùng (mobile) / đầu tiên của chuỗi fade (S#21).
+    <aside className="preload-fade flex shrink-0 flex-col bg-[#1B1512] lg:sticky lg:top-0 lg:h-dvh lg:w-80">
       {/* Desktop: nav vertically centered (flex-1 + justify-center) inside the
           full-height column. Mobile: sidebar is a top strip, rows stacked
           (compact padding — trang không cuộn, S#17 vòng sửa 1). */}
@@ -54,13 +55,14 @@ export function HomeSidebar({
               href={item.href}
               aria-current={isActive ? "page" : undefined}
               className={[
-                // Highlight CHỮ đỏ son (engineer chốt — không thêm bg cho tag):
-                // tag hiện hành chữ đỏ son; active: (pseudo) đổi chữ đỏ son
-                // ngay lúc nhấn, kể cả tag dẫn sang route khác.
-                "block border-b-2 border-[#EDE1C8]/12 py-2.5 text-right font-sans text-xs font-medium uppercase tracking-[0.2em] transition-colors active:text-[#A62C2B] lg:py-3.5",
+                // Highlight CHỮ đỏ son (engineer chốt — không thêm bg cho tag);
+                // S#26: BORDER cũng chuyển đỏ son khi tag được click — cả
+                // pseudo `active:` (ngay lúc nhấn, kể cả tag dẫn route khác)
+                // lẫn tag hiện hành (isActive).
+                "block border-b-2 py-2.5 text-right font-sans text-xs font-medium uppercase tracking-[0.2em] transition-colors active:border-[#A62C2B] active:text-[#A62C2B] lg:py-3.5",
                 isActive
-                  ? "text-[#A62C2B]"
-                  : "text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
+                  ? "border-[#A62C2B] text-[#A62C2B]"
+                  : "border-[#EDE1C8]/12 text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
               ].join(" ")}
             >
               {item.label}

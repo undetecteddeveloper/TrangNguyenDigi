@@ -141,3 +141,42 @@
   --block-border: var(--border);
   --block-hover: var(--brand);
 }
+
+/* ============================================================
+   PRELOADER (S#21) — các khối lớn của mỗi trang fade in LẦN LƯỢT
+   từ trên xuống dưới khi mount (load đầu + mỗi lần vào trang,
+   vì element remount theo route). Gắn class `preload-fade` +
+   inline style `--preload-order: 0..3` theo thứ tự trên→dưới.
+   Tổng chuỗi đúng 1.5s: duration 750ms + trễ 250ms × order (max 3).
+   Ease-out: tốc độ bình thường ở đầu, chậm dần về cuối (engineer).
+   fill-mode `both` → element ẩn (opacity 0) trong lúc chờ delay,
+   không bị nháy nội dung trước khi animation bắt đầu.
+   ============================================================ */
+:root {
+  --preload-duration: 750ms;
+  --preload-step: 250ms;
+  --preload-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes preload-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.preload-fade {
+  animation: preload-fade var(--preload-duration) var(--preload-ease) both;
+  animation-delay: calc(var(--preload-order, 0) * var(--preload-step));
+}
+
+/* Tôn trọng user tắt animation (a11y). */
+@media (prefers-reduced-motion: reduce) {
+  .preload-fade {
+    animation: none;
+  }
+}

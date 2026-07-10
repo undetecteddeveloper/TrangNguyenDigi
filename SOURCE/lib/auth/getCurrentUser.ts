@@ -22,7 +22,7 @@ export async function getCurrentUser() {
 export type CurrentUserProfile = { id: string; email: string; displayName: string };
 
 /** Giống getCurrentUser() nhưng kèm display_name từ user_profiles — dùng cho
- * navbar (AccountMenu) hiển thị tên + biết trạng thái đăng nhập. */
+ * navbar (HeaderProfile/SidebarProfile) hiển thị tên + biết trạng thái đăng nhập. */
 export async function getCurrentUserProfile(): Promise<CurrentUserProfile | null> {
   const supabase = await createClient();
   try {

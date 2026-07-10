@@ -28,7 +28,7 @@ export function QuestionRenderer({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <span className="eyebrow">
-          Câu {index} / {total}
+          Question {index} / {total}
         </span>
         <RichText
           text={question.content}
@@ -37,7 +37,7 @@ export function QuestionRenderer({
       </div>
 
       <fieldset className="flex flex-col gap-3 border-0 p-0">
-        <legend className="sr-only">Chọn đáp án</legend>
+        <legend className="sr-only">Choose an answer</legend>
         {question.choices.map((choice) => (
           <AnswerChoice
             key={choice.id}

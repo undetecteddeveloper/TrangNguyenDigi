@@ -24,8 +24,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrangNguyenDigi",
-  description: "Nền tảng luyện đề thi trực tuyến cho học sinh THCS và THPT Việt Nam",
+  title: "MS-MOLAR",
+  description:
+    "Online exam practice platform for secondary and high school students in Vietnam",
 };
 
 export default function RootLayout({
@@ -35,7 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="vi"
+      lang="en"
       className={`${geistMono.variable} ${sourceSerif.variable} ${beVietnamPro.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

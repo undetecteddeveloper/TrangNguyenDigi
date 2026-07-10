@@ -1,22 +1,22 @@
 "use client";
 
-// SidebarProfile — ô profile góc dưới-trái sidebar homepage (Layer 1, S#17
-// vòng sửa 1). Chỉ render khi ĐÃ đăng nhập (guest thấy tag "Account" trong nav
-// thay thế). Click → dropup (mở LÊN TRÊN vì ô nằm đáy màn hình) gồm:
-//  - "Edit": đổi Tên hiển thị ngay tại chỗ qua updateProfile Server Action
-//    (ràng buộc như HeaderProfile: ≤12 ký tự, chỉ chữ cái + dấu chấm — lọc lúc
-//    gõ ở client, server validate lại authoritative).
-//  - "Sign out": signOut Server Action → về /?auth=signin.
-// Panel dropup nền ngà trên sidebar đen sơn mài (phân lớp bằng màu nền +
-// hairline — DESIGN.md, không shadow). Nhãn tiếng Anh đồng bộ homepage.
+// HeaderProfile — ô profile trong SiteHeader (L2/3/4), CHỈ render khi ĐÃ đăng
+// nhập (guest thấy tag "Account" trong nav thay thế — S#19, đồng bộ homepage).
+// Bản đối xứng của SidebarProfile (L1): cùng chức năng Edit/Sign out, cùng
+// Server Actions, nhưng dropdown MỞ XUỐNG (header nằm đỉnh màn hình, ngược với
+// ô sidebar nằm đáy) và trigger nén gọn cho khớp navbar h-14.
+// Panel nền ngà trên navbar đen sơn mài (phân lớp bằng màu + hairline —
+// DESIGN.md, không shadow). Nhãn tiếng Anh đồng bộ homepage.
 import Image from "next/image";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, updateProfile, type AuthState } from "@/app/(layer1)/actions";
 
+export type MenuUser = { displayName: string };
+
 const AVATAR = "/images/user-avatar-placeholder.png";
 
-export function SidebarProfile({ displayName: initial }: { displayName: string }) {
+export function HeaderProfile({ displayName: initial }: { displayName: string }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(initial);
@@ -56,32 +56,34 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
         />
       )}
 
-      {/* Trigger — avatar + tên (truncate "…"), giữ bố cục ô account cũ. */}
+      {/* Trigger — avatar + tên (truncate "…") + chevron xuống, nén vừa h-15. */}
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 rounded-md border border-[#EDE1C8]/12 px-3 py-2.5 transition-colors hover:border-[#EDE1C8]/30"
+        className="flex items-center gap-2 rounded-md border border-[#EDE1C8]/12 px-2.5 py-1.5 transition-colors hover:border-[#EDE1C8]/30"
       >
         <Image
           src={AVATAR}
           alt=""
-          width={32}
-          height={32}
+          width={24}
+          height={24}
           className="shrink-0 rounded-full"
         />
-        <span className="min-w-0 flex-1 truncate text-left font-sans text-sm text-[#EDE1C8]">
+        {/* Tên ẩn ở màn hẹp nhất — 4 tag + avatar không đủ chỗ 375px (tránh
+            h-scroll); avatar + chevron vẫn đủ nhận diện là ô tài khoản. */}
+        <span className="max-w-32 truncate font-sans text-sm text-[#EDE1C8] max-sm:hidden">
           {displayName}
         </span>
-        <ChevronUp open={open} />
+        <ChevronDown open={open} />
       </button>
 
-      {/* Dropup — mở lên trên, nền ngà đảo tông trên sidebar đen. */}
+      {/* Dropdown — mở xuống dưới, nền ngà đảo tông trên navbar đen. */}
       {open && (
         <div
           role="menu"
-          className="absolute bottom-full left-0 z-20 mb-2 w-full rounded-md border border-[#D8C9A8] bg-[#EDE1C8] p-1"
+          className="absolute right-0 top-full z-20 mt-2 w-56 rounded-md border border-[#D8C9A8] bg-[#EDE1C8] p-1"
         >
           {!editing ? (
             <>
@@ -109,11 +111,11 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
               action={formAction}
               className="flex flex-col items-center gap-2 p-2"
             >
-              <label htmlFor="sidebar-profile-display-name" className="sr-only">
+              <label htmlFor="header-profile-display-name" className="sr-only">
                 Display name
               </label>
               <input
-                id="sidebar-profile-display-name"
+                id="header-profile-display-name"
                 name="displayName"
                 value={draft}
                 onChange={(e) => {
@@ -159,7 +161,7 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
   );
 }
 
-function ChevronUp({ open }: { open: boolean }) {
+function ChevronDown({ open }: { open: boolean }) {
   return (
     <svg
       aria-hidden
@@ -169,7 +171,7 @@ function ChevronUp({ open }: { open: boolean }) {
       }`}
     >
       <path
-        d="M1 6.5 6 1.5 11 6.5"
+        d="M1 1.5 6 6.5 11 1.5"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

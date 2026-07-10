@@ -9,14 +9,16 @@ export function TopicBreakdown({ topics }: { topics: TopicResult[] }) {
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
-      <span className="eyebrow">Chủ đề</span>
+      <span className="eyebrow">Topics</span>
       <ul className="mt-3 flex flex-col gap-3">
         {topics.map((t) => {
           const pct = t.total > 0 ? (t.correct / t.total) * 100 : 0;
           return (
             <li key={t.topic} className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm text-foreground">Câu {t.topic}</span>
+                {/* Chỉ hiện tên topic (giữ tiếng Việt — data của đề); bỏ prefix
+                    "Câu" vì không dịch tự nhiên sang English. */}
+                <span className="text-sm text-foreground">{t.topic}</span>
                 <span className="font-mono text-xs text-muted-foreground tabular-nums">
                   {t.correct}/{t.total}
                 </span>

@@ -16,7 +16,7 @@ export function StartAttemptButton({ examId }: { examId: string }) {
         type="submit"
         className="w-full rounded-[4px] bg-brand px-6 py-3 font-medium text-brand-foreground transition-colors duration-200 hover:bg-[#8F2523] sm:w-auto sm:px-12"
       >
-        Bắt đầu
+        Start
       </button>
     </form>
   );

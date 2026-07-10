@@ -16,7 +16,7 @@ export function ScoreCard({
 
   return (
     <section className="rounded-xl border border-border bg-card p-6 text-center sm:p-8">
-      <span className="eyebrow">Kết quả</span>
+      <span className="eyebrow">Result</span>
       <h1 className="mt-2 font-serif text-2xl leading-snug text-card-foreground">
         {examTitle}
       </h1>
@@ -32,19 +32,19 @@ export function ScoreCard({
       {/* Thống kê: đúng · sai · thời gian (thời gian tượng trưng — Q1). */}
       <dl className="mt-6 grid grid-cols-3 gap-3 border-t border-border pt-5 text-center">
         <div className="flex flex-col gap-1">
-          <dt className="eyebrow">Câu đúng</dt>
+          <dt className="eyebrow">Correct</dt>
           <dd className="font-serif text-xl text-foreground tabular-nums">
             {result.correct}
           </dd>
         </div>
         <div className="flex flex-col gap-1">
-          <dt className="eyebrow">Câu sai</dt>
+          <dt className="eyebrow">Wrong</dt>
           <dd className="font-serif text-xl text-foreground tabular-nums">
             {wrong}
           </dd>
         </div>
         <div className="flex flex-col gap-1">
-          <dt className="eyebrow">Thời gian</dt>
+          <dt className="eyebrow">Time</dt>
           <dd className="font-serif text-xl text-muted-foreground tabular-nums">
             —
           </dd>

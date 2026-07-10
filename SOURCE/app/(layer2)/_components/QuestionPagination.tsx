@@ -37,8 +37,8 @@ export function QuestionPagination({
                 type="button"
                 onClick={() => onJump(i)}
                 aria-current={isCurrent ? "true" : undefined}
-                aria-label={`Câu ${i + 1}${isAnswered ? " (đã làm)" : ""}${
-                  isFlagged ? " (đã đánh dấu)" : ""
+                aria-label={`Question ${i + 1}${isAnswered ? " (answered)" : ""}${
+                  isFlagged ? " (flagged)" : ""
                 }`}
                 className={`relative flex size-9 items-center justify-center rounded-md border text-sm tabular-nums transition-colors ${
                   isCurrent

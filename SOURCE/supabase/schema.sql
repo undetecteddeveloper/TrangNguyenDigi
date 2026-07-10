@@ -22,6 +22,10 @@ create table if not exists public.user_profiles (
 
 -- Tự tạo user_profiles khi có user mới trong auth.users (chuẩn Supabase).
 -- SECURITY DEFINER để bypass RLS lúc insert tự động.
+-- S#24: OAuth (Google/Facebook) không set 'display_name' trong
+-- raw_user_meta_data — chỉ có 'full_name'/'name' (Google) hoặc 'name'
+-- (Facebook). Fallback chain: display_name → full_name → name → phần
+-- trước "@" của email (KHÔNG dùng email đầy đủ — lộ email trên UI).
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -30,7 +34,15 @@ set search_path = public
 as $$
 begin
   insert into public.user_profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data ->> 'display_name', new.email))
+  values (
+    new.id,
+    coalesce(
+      new.raw_user_meta_data ->> 'display_name',
+      new.raw_user_meta_data ->> 'full_name',
+      new.raw_user_meta_data ->> 'name',
+      split_part(new.email, '@', 1)
+    )
+  )
   on conflict (id) do nothing;
   return new;
 end;

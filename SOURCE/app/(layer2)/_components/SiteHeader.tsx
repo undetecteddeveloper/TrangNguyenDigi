@@ -1,56 +1,87 @@
 "use client";
 
 // SiteHeader — navbar DÙNG CHUNG cho UI Layer 2/3/4 (KHÔNG dùng cho L1 — L1 có
-// HomeSidebar riêng). Các thẻ nav độc lập: "Phân tích" (→ L3), "Nhập đề" (→ L4).
-// "Tài khoản" dùng AccountMenu dùng chung (components/shared) — chưa đăng
-// nhập: Đăng ký/Đăng nhập; đã đăng nhập: avatar + Chỉnh sửa/Đăng xuất. Nền
-// theo token --nav-* mặc định ở :root (đen sơn mài — theme Mực & Sơn mài đồng
-// bộ toàn site, S#17). `user` được fetch 1 lần ở (layer2)/layout.tsx.
+// HomeSidebar riêng). S#19: đồng bộ theo MẪU sidebar homepage nhưng nằm NGANG
+// phía trên — cùng bộ nav items (Home / Analytics / History / Import), cùng
+// style tag (uppercase tracking rộng, muted → hover sáng, active = CHỮ đỏ son,
+// không bg — chốt S#17 vòng 3), nhãn tiếng Anh.
+//  - Guest: thêm tag "Account" (→ /?auth=signin, mở form auth trong homepage).
+//  - Authed: tag "Account" ẩn, thay bằng ô HeaderProfile (avatar + tên +
+//    dropdown Edit/Sign out mở xuống) — đối xứng SidebarProfile của homepage.
+// Active tag theo usePathname() (header sống trên nhiều route, khác homepage
+// truyền prop tĩnh). Nền theo token --nav-* ở :root (đen sơn mài).
+// `user` được fetch 1 lần ở (layer2)/layout.tsx.
 
+import Image from "next/image";
 import Link from "next/link";
-import { AccountMenu, type MenuUser } from "@/components/shared/AccountMenu";
+import { usePathname } from "next/navigation";
+import { HeaderProfile, type MenuUser } from "@/components/shared/HeaderProfile";
+
+type NavItem = { label: string; href: string };
+
+// Cùng bộ nav với HomeSidebar (L1) — đồng bộ 100% (engineer chốt S#19 Q2).
+const NAV: NavItem[] = [
+  { label: "Home", href: "/" },
+  { label: "Analytics", href: "/me/dashboard" },
+  { label: "History", href: "#" },
+  { label: "Import", href: "/admin/import" },
+];
+
+const GUEST_NAV: NavItem[] = [...NAV, { label: "Account", href: "/?auth=signin" }];
 
 export function SiteHeader({ user = null }: { user?: MenuUser | null }) {
+  const pathname = usePathname();
+  const items = user ? NAV : GUEST_NAV;
+
   return (
-    <header className="sticky top-0 z-30 border-b border-[color:var(--nav-border)] bg-[var(--nav-bg)] backdrop-blur">
-      {/* Bố cục header = 2 item ngang hàng cho flexbox: logo (item 1) và
-          TOÀN BỘ khối nav (item 2, một block duy nhất) — justify-between đẩy
-          2 item ra 2 mép (chỉ còn padding container, không có khoảng đệm dư
-          thừa) — đúng chuẩn phổ biến (vd navbar Google: logo sát trái, nav
-          sát phải). */}
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
-        {/* shrink-0 + whitespace-nowrap: logo không bao giờ wrap dòng dù nav
-            chiếm nhiều chỗ hơn (gap-[12vw]) — padding mobile giảm (px-4) để
-            nhường đủ không gian, thay vì để logo tự vỡ dòng. */}
-        <Link
-          href="/"
-          className="shrink-0 whitespace-nowrap font-serif text-lg tracking-tight text-[var(--nav-fg)]"
-        >
-          Trạng Nguyên
+    // preload order 0 — navbar là khối đầu tiên của chuỗi fade (S#21).
+    // h-15 (60px, S#21 — tăng từ h-14 để logo lớn hơn): các sticky offset
+    // dưới navbar (ExamFilters, ExamPlayer top bar) phải dùng top-15 khớp theo.
+    <header className="preload-fade sticky top-0 z-30 border-b border-[color:var(--nav-border)] bg-[var(--nav-bg)] backdrop-blur">
+      <div className="mx-auto flex h-15 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        {/* Logo — brand_logo.png (S#20, thay text "Trạng Nguyên") — neo về trang
+            chủ. Ẩn ở màn hẹp nhất (nav 5 tag không đủ chỗ; tag "Home" đã gánh
+            vai trò neo nên không mất chức năng). Ảnh gốc 715×650 — height
+            38px (+6%, S#21), width auto theo tỉ lệ. */}
+        <Link href="/" aria-label="Home" className="shrink-0 max-sm:hidden">
+          <Image
+            src="/images/brand_logo.png"
+            alt="Trạng Nguyên"
+            width={42}
+            height={38}
+            className="h-[38px] w-auto"
+          />
         </Link>
 
-        {/* Khối nav — một item duy nhất ở cấp header. Khoảng cách GIỮA các
-            thẻ = gap-[12vw] đồng bộ (12% chiều ngang màn hình) — thay cho
-            cách cũ "mỗi thẻ rộng 8vw" (box rộng khác nhau giữa text-item và
-            avatar khiến khoảng trống nhìn KHÔNG đều — engineer phát hiện).
-            Item giờ tự nhiên theo nội dung (auto width), gap lo hết khoảng
-            cách nên luôn đều nhau bất kể item là text hay avatar. */}
-        <nav className="flex items-center gap-[12vw]">
-          {/* Thẻ <a> độc lập — Phân tích (Layer 3) + Nhập đề (Layer 4). */}
-          <Link
-            href="/me/dashboard"
-            className="eyebrow whitespace-nowrap text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)] max-sm:text-[10px] max-sm:tracking-[0.04em]"
-          >
-            Phân tích
-          </Link>
-          <Link
-            href="/admin/import"
-            className="eyebrow whitespace-nowrap text-[var(--nav-fg-muted)] transition-colors hover:text-[var(--nav-fg)] max-sm:text-[10px] max-sm:tracking-[0.04em]"
-          >
-            Nhập đề
-          </Link>
+        {/* Dãy tag ngang — style chép từ HomeSidebar (bỏ hairline chia dòng vì
+            các tag nằm ngang, đường kẻ dọc giữa tag sẽ thành nhiễu). Mobile:
+            logo ẩn → nav giãn hết bề ngang (justify-between), chữ/tracking nén. */}
+        <nav className="flex items-center gap-3 sm:gap-8 lg:gap-10 max-sm:w-full max-sm:justify-between">
+          {items.map((item) => {
+            const isActive =
+              item.href !== "#" &&
+              (item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                className={[
+                  "whitespace-nowrap font-sans text-xs font-medium uppercase tracking-[0.2em] transition-colors active:text-[#A62C2B] max-sm:text-[10px] max-sm:tracking-[0.08em]",
+                  isActive
+                    ? "text-[#A62C2B]"
+                    : "text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
+                ].join(" ")}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
 
-          <AccountMenu user={user} />
+          {/* Ô profile — chỉ khi đã đăng nhập (guest dùng tag Account ở trên). */}
+          {user && <HeaderProfile displayName={user.displayName} />}
         </nav>
       </div>
     </header>

@@ -14,7 +14,7 @@ export function FlagButton({ flagged, onToggle }: FlagButtonProps) {
       type="button"
       onClick={onToggle}
       aria-pressed={flagged}
-      title={flagged ? "Bỏ đánh dấu câu này" : "Đánh dấu câu này để xem lại"}
+      title={flagged ? "Unflag this question" : "Flag this question for review"}
       className={`flex items-center gap-1.5 transition-colors ${
         flagged ? "text-brand" : "text-muted-foreground hover:text-foreground"
       }`}

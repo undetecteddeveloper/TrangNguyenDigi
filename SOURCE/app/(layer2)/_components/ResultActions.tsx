@@ -1,31 +1,66 @@
 // ResultActions — 2 ô Save PDF + Share ở màn Result (Layer 2). GĐ 3 M3.1 Task 4.
-// Template: 2 ô vuông cạnh block chủ đề. Q3: icon TRỐNG + nhãn "save"/"share",
-// CHƯA có function (placeholder) → button vô hại, disabled để báo "chưa hoạt động".
-// Visual "tờ giấy trắng": card hairline, KHÔNG fill màu (màu template tượng trưng, Q6).
+// S#26: icon THẬT (download/share, SVG inline đồng bộ style icon site) thay ô
+// vuông trống; BỎ text hiển thị — thay bằng tooltip native (title) khi hover
+// + text sr-only cho screen reader. Vẫn là placeholder disabled (chưa có
+// function — sẽ gắn ở milestone sau).
+// Visual "tờ giấy trắng": card hairline, KHÔNG fill màu.
 
 const ACTIONS = [
-  { key: "save", label: "Lưu" },
-  { key: "share", label: "Chia sẻ" },
+  { key: "save", label: "Save", Icon: DownloadIcon },
+  { key: "share", label: "Share", Icon: ShareIcon },
 ] as const;
 
 export function ResultActions() {
   return (
     <div className="grid grid-cols-2 gap-3">
-      {ACTIONS.map((a) => (
+      {ACTIONS.map(({ key, label, Icon }) => (
         <button
-          key={a.key}
+          key={key}
           type="button"
           disabled
-          title="Tính năng sẽ có sau"
-          className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
+          title={`${label} — coming soon`}
+          className="flex aspect-square items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {/* Icon trống — ô vuông hairline placeholder (Q3). */}
-          <span aria-hidden className="size-6 rounded-md border border-border" />
-          <span className="font-mono text-xs lowercase tracking-wide">
-            {a.label}
-          </span>
+          <Icon className="size-6" />
+          <span className="sr-only">{label}</span>
         </button>
       ))}
     </div>
+  );
+}
+
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <path
+        d="M12 4v10m0 0 4-4m-4 4-4-4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ShareIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <circle cx="6" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="m8.3 10.8 6.4-3.6M8.3 13.2l6.4 3.6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

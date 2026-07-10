@@ -8,6 +8,7 @@
 // remount → transition chạy mượt cả hai chiều. Panel đang ẩn có `inert` (không
 // tab/đọc screen-reader vào được). Hướng transition: NGANG phải→trái (engineer
 // chốt vòng sửa 1) — hero trượt ra trái, form trượt vào từ phải.
+import Image from "next/image";
 import Link from "next/link";
 import { AuthForm } from "./AuthForm";
 
@@ -19,9 +20,13 @@ export function HomeStage({ auth }: { auth: AuthMode }) {
   return (
     <div className="relative z-10 my-auto grid w-full">
       {/* ---------- Trạng thái 1: Hero ---------- */}
+      {/* Section hero bỏ max-w-3xl (S#22 vòng sửa 1) — hàng h1+logo cần trải
+          FULL bề ngang content area để logo nằm sát mép phải; các khối text
+          khác tự giới hạn bề rộng riêng (p có max-w-xl, eyebrow/CTA theo
+          nội dung) nên không bị ảnh hưởng. */}
       <section
         inert={showAuth || undefined}
-        className={`col-start-1 row-start-1 max-w-3xl self-center transition-all duration-500 ease-out ${
+        className={`col-start-1 row-start-1 w-full self-center transition-all duration-500 ease-out ${
           showAuth
             ? "pointer-events-none -translate-x-6 opacity-0"
             : "translate-x-0 opacity-100"
@@ -34,10 +39,26 @@ export function HomeStage({ auth }: { auth: AuthMode }) {
             at most one per viewport. */}
         <div className="mt-4 h-0.5 w-10 bg-[#B8863B]" aria-hidden />
 
-        <h1 className="mt-5 font-serif text-xl leading-[1.2] font-semibold tracking-tight text-[#1B1512] sm:text-3xl lg:text-4xl">
-          An Exam Practice Engine Integrated with a Chart-Based Analytics
-          System, Capable of Generating New Data from PDF Files
-        </h1>
+        {/* h1 + brand logo ngang hàng (S#22, vòng sửa 1): hàng trải FULL bề
+            ngang — h1 giữ max-w-2xl bên trái (chữ trải đều 2–3 dòng, không bị
+            logo dồn), logo đẩy SÁT MÉP PHẢI content area (ml-auto). Khung logo
+            18.5vw×18.5vh (16.5 +12%, S#26) + object-contain giữ tỉ lệ 715×650 (không méo).
+            flex-wrap: màn quá hẹp thì logo xuống dòng thay vì tràn/bóp méo. */}
+        <div className="mt-5 flex flex-wrap items-center gap-6 lg:gap-8">
+          <h1 className="min-w-0 max-w-3xl flex-1 basis-64 font-serif text-xl leading-[1.2] font-semibold tracking-tight text-[#1B1512] sm:text-3xl lg:text-4xl">
+            Multi-Subject &amp; Multi-Grade Online Learning Platform with
+            Digital Footprint Analytics and User-Generated Content Synthesis
+          </h1>
+          <Image
+            src="/images/brand_logo.png"
+            alt=""
+            aria-hidden
+            width={220}
+            height={200}
+            className="ml-auto shrink-0 object-contain"
+            style={{ width: "18.5vw", height: "18.5vh" }}
+          />
+        </div>
 
         <p className="mt-5 max-w-xl font-sans text-sm leading-[1.7] text-[#1B1512]/80 sm:text-lg">
           A{" "}

@@ -5,8 +5,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Các path không yêu cầu đăng nhập. */
-const PUBLIC_PATHS = ["/", "/login"];
+/** Các path không yêu cầu đăng nhập. `/auth/callback` (S#23): điểm về của
+ * OAuth + email link — request tới đây CHƯA có cookie session, không whitelist
+ * thì bị chặn trước khi route handler kịp đổi code lấy session.
+ * (`/reset-password` KHÔNG public — cần recovery session từ email link.) */
+const PUBLIC_PATHS = ["/", "/login", "/auth/callback"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

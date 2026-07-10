@@ -4,23 +4,52 @@
 // form nền ngà #EDE1C8, nút đỏ son #A62C2B, focus underline vàng đồng #B8863B.
 // Không đổ bóng, bo góc 4px (quy tắc Elevation & Shapes). Nằm trong content
 // area của homepage (HomeStage) — không còn page /login riêng.
-// Logic giữ nguyên: signIn/signUp Server Actions (L1).
-// Google/Facebook + "Quên mật khẩu" = placeholder disabled (chưa có OAuth/reset).
+// Logic: signIn/signUp Server Actions (L1). S#23 hoàn thiện auth module:
+//  - Google/Facebook OAuth THẬT (signInWithOAuth — 1 form chung, button
+//    name="provider"; hoạt động khi engineer đã cấu hình provider ở Supabase).
+//  - "Forgot password?" mở VIEW reset ngay trong card (nhập email → gửi link).
+//  - Hiển thị `state.info` (vd signup cần xác nhận email) — tông trung tính,
+//    khác error đỏ son.
+// S#24: panel trái đổi từ watermark logo → chữ cái serif phóng to trang trí
+// (tinh thần drop-cap DESIGN.md); password field có toggle hiện/ẩn.
+// S#25: thân form (reset view ⇄ sign-in/sign-up) bọc trong AutoHeightPanel —
+// card giãn/nở mượt khi số field thay đổi giữa 2 tab, thay vì nhảy khựng.
 "use client";
 
-import Image from "next/image";
-import { useActionState, useState } from "react";
-import { signIn, signUp, type AuthState } from "../actions";
+import {
+  useActionState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  requestPasswordReset,
+  signIn,
+  signInWithOAuth,
+  signUp,
+  type AuthState,
+} from "../actions";
 
 type Mode = "signin" | "signup";
 
 export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
   const [mode, setMode] = useState<Mode>(initialMode);
+  // View reset mật khẩu — đè lên form sign in/up; tab nào bấm cũng thoát reset.
+  const [resetOpen, setResetOpen] = useState(false);
   const action = mode === "signin" ? signIn : signUp;
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     action,
     null,
   );
+  const [oauthState, oauthAction, oauthPending] = useActionState<
+    AuthState,
+    FormData
+  >(signInWithOAuth, null);
+  const [resetState, resetAction, resetPending] = useActionState<
+    AuthState,
+    FormData
+  >(requestPasswordReset, null);
 
   const isSignup = mode === "signup";
 
@@ -28,31 +57,36 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
     <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[#D8C9A8] bg-[#EDE1C8] sm:flex-row">
       {/* ---------- Panel trái: tabs (đen sơn mài) ---------- */}
       <div className="relative flex overflow-hidden bg-[#1B1512] p-6 sm:w-2/5 sm:flex-col sm:justify-center sm:p-8">
-        {/* Nền: brand logo (ASSETS/images/brand_logo.png, đã trim viền trắng)
-            — watermark mờ giữa panel, tabs nổi lên trên. */}
+        {/* Nền: chữ cái Latinh serif phóng to trang trí (S#24, thay watermark
+            logo cũ) — "M"/"S" khớp MS-MOLAR, tông đỏ son mờ (tinh thần
+            drop-cap DESIGN.md: font display, color primary). Tĩnh — S#26 bỏ
+            transition remount theo tab (engineer yêu cầu). */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-25"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
         >
-          <Image
-            src="/images/brand_logo.png"
-            alt=""
-            width={220}
-            height={200}
-            className="w-3/4 max-w-[220px] object-contain"
-          />
+          <div className="flex select-none font-serif leading-none text-[9rem] text-[#A62C2B]/[0.16] sm:text-[11rem]">
+            <span className="-mr-4 sm:-mr-6">M</span>
+            <span className="mt-10 sm:mt-14">S</span>
+          </div>
         </div>
 
         <div className="relative flex gap-3 sm:flex-col sm:gap-2">
           <TabButton
-            active={!isSignup}
-            onClick={() => setMode("signin")}
-            label="Đăng nhập"
+            active={!isSignup && !resetOpen}
+            onClick={() => {
+              setMode("signin");
+              setResetOpen(false);
+            }}
+            label="Sign in"
           />
           <TabButton
-            active={isSignup}
-            onClick={() => setMode("signup")}
-            label="Đăng ký"
+            active={isSignup && !resetOpen}
+            onClick={() => {
+              setMode("signup");
+              setResetOpen(false);
+            }}
+            label="Sign up"
           />
         </div>
       </div>
@@ -67,89 +101,214 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
         </div>
 
         <h1 className="mb-6 text-center text-2xl font-serif tracking-wide text-[#1B1512]">
-          {isSignup ? "Đăng ký" : "Đăng nhập"}
+          {resetOpen ? "Reset password" : isSignup ? "Sign up" : "Sign in"}
         </h1>
 
-        <form action={formAction}>
-          {/* Key theo mode → field animate khi chuyển tab; "Tên hiển thị"
-              xuất hiện/ẩn tự nhiên theo remount. */}
-          <div
-            key={mode}
-            className="space-y-5 duration-300 animate-in fade-in slide-in-from-right-3"
-          >
-            {isSignup && (
-              <Field
-                id="displayName"
-                name="displayName"
-                type="text"
-                placeholder="Tên hiển thị"
-                icon={<UserIcon className="size-4" />}
-              />
-            )}
-            <Field
-              id="email"
-              name="email"
-              type="email"
-              placeholder="Email"
-              required
-              icon={<MailIcon className="size-4" />}
-            />
-            <Field
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Mật khẩu"
-              required
-              icon={<LockIcon className="size-4" />}
-            />
-          </div>
+        {/* S#25: bọc toàn bộ phần THÂN thay đổi chiều cao (reset view ⇄
+            sign-in/sign-up — số field khác nhau) trong AutoHeightPanel →
+            card giãn/nở MƯỢT thay vì nhảy khựng khi đổi tab hoặc mở/đóng
+            reset. h1 phía trên giữ nguyên (luôn 1 dòng, không cần đo). */}
+        <AutoHeightPanel measureKey={resetOpen ? "reset" : mode}>
+          {resetOpen ? (
+            <div className="duration-300 animate-in fade-in slide-in-from-right-3">
+              <p className="text-sm text-[#6B655C]">
+                Enter your account email and we&apos;ll send you a link to
+                reset your password.
+              </p>
+              <form action={resetAction} className="mt-5">
+                <Field
+                  id="reset-email"
+                  name="email"
+                  type="email"
+                  placeholder="Email"
+                  required
+                  icon={<MailIcon className="size-4" />}
+                />
+                {resetState?.error && (
+                  <p role="alert" className="mt-4 text-sm text-[#A62C2B]">
+                    {resetState.error}
+                  </p>
+                )}
+                {resetState?.info && (
+                  <p role="status" className="mt-4 text-sm text-[#6B655C]">
+                    {resetState.info}
+                  </p>
+                )}
+                <div className="mt-6 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setResetOpen(false)}
+                    className="text-xs text-[#6B655C] transition-colors hover:text-[#1B1512]"
+                  >
+                    ← Back to sign in
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetPending}
+                    className="rounded-[4px] bg-[#A62C2B] px-7 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-[#EDE1C8] transition-colors hover:bg-[#8F2523] disabled:opacity-60"
+                  >
+                    {resetPending ? "Sending…" : "Send reset link"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <>
+              <form action={formAction}>
+                {/* Key theo mode → field animate khi chuyển tab; "Tên hiển thị"
+                    xuất hiện/ẩn tự nhiên theo remount. */}
+                <div
+                  key={mode}
+                  className="space-y-5 duration-300 animate-in fade-in slide-in-from-right-3"
+                >
+                  {isSignup && (
+                    <Field
+                      id="displayName"
+                      name="displayName"
+                      type="text"
+                      placeholder="Display name"
+                      icon={<UserIcon className="size-4" />}
+                    />
+                  )}
+                  <Field
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="Email"
+                    required
+                    icon={<MailIcon className="size-4" />}
+                  />
+                  <Field
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder="Password"
+                    required
+                    icon={<LockIcon className="size-4" />}
+                  />
+                </div>
 
-          {state?.error && (
-            <p role="alert" className="mt-4 text-sm text-[#A62C2B]">
-              {state.error}
-            </p>
+                {state?.error && (
+                  <p role="alert" className="mt-4 text-sm text-[#A62C2B]">
+                    {state.error}
+                  </p>
+                )}
+                {/* info — message trung tính (vd signup cần xác nhận email, S#23). */}
+                {state?.info && (
+                  <p role="status" className="mt-4 text-sm text-[#6B655C]">
+                    {state.info}
+                  </p>
+                )}
+
+                <div className="mt-6 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setResetOpen(true)}
+                    className="text-xs text-[#6B655C] transition-colors hover:text-[#1B1512]"
+                  >
+                    Forgot password?
+                  </button>
+                  {/* button-primary DESIGN.md: nền đỏ son, chữ ngà, label-caps, bo 4px. */}
+                  <button
+                    type="submit"
+                    disabled={pending}
+                    className="rounded-[4px] bg-[#A62C2B] px-7 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-[#EDE1C8] transition-colors hover:bg-[#8F2523] disabled:opacity-60"
+                  >
+                    {pending ? "Processing…" : isSignup ? "Sign up" : "Sign in"}
+                  </button>
+                </div>
+              </form>
+
+              {/* Social — OAuth THẬT (S#23): MỘT form chung, mỗi nút là submit
+                  kèm name="provider" → signInWithOAuth đọc provider từ
+                  formData. Lỗi (vd provider chưa bật trong Supabase) hiện
+                  ngay dưới hàng nút. */}
+              <form
+                action={oauthAction}
+                className="mt-6 flex flex-col gap-3 border-t border-[#D8C9A8] pt-4 text-xs text-[#6B655C]"
+              >
+                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+                  <span>Or {isSignup ? "sign up" : "sign in"} with</span>
+                  <div className="flex items-center gap-4">
+                    <SocialButton
+                      provider="google"
+                      label="Google"
+                      pending={oauthPending}
+                      icon={<GoogleIcon className="size-4" />}
+                    />
+                    <SocialButton
+                      provider="facebook"
+                      label="Facebook"
+                      pending={oauthPending}
+                      icon={<FacebookIcon className="size-4" />}
+                    />
+                  </div>
+                </div>
+                {oauthState?.error && (
+                  <p role="alert" className="text-[#A62C2B]">
+                    {oauthState.error}
+                  </p>
+                )}
+              </form>
+            </>
           )}
-
-          <div className="mt-6 flex items-center justify-between gap-4">
-            <button
-              type="button"
-              disabled
-              title="Chức năng đang phát triển"
-              className="cursor-not-allowed text-xs text-[#6B655C]/70"
-            >
-              Quên mật khẩu?
-            </button>
-            {/* button-primary DESIGN.md: nền đỏ son, chữ ngà, label-caps, bo 4px. */}
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-[4px] bg-[#A62C2B] px-7 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-[#EDE1C8] transition-colors hover:bg-[#8F2523] disabled:opacity-60"
-            >
-              {pending ? "Đang xử lý…" : isSignup ? "Đăng ký" : "Đăng nhập"}
-            </button>
-          </div>
-        </form>
-
-        {/* Social — placeholder disabled */}
-        <div className="mt-6 flex flex-col items-center gap-3 border-t border-[#D8C9A8] pt-4 text-xs text-[#6B655C] sm:flex-row sm:justify-between">
-          <span>Hoặc {isSignup ? "đăng ký" : "đăng nhập"} với</span>
-          <div className="flex items-center gap-4">
-            <SocialButton
-              label="Google"
-              icon={<GoogleIcon className="size-4" />}
-            />
-            <SocialButton
-              label="Facebook"
-              icon={<FacebookIcon className="size-4" />}
-            />
-          </div>
-        </div>
+        </AutoHeightPanel>
       </div>
     </div>
   );
 }
 
 /* ---------- Sub-components ---------- */
+
+// useLayoutEffect gây warning khi chạy trong SSR ("does nothing on the
+// server") — dùng bản isomorphic (useEffect trên server, useLayoutEffect
+// trên client) để đo/set height NGAY trước paint đầu tiên, không nháy.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+/**
+ * AutoHeightPanel — bọc nội dung có thể đổi chiều cao (số field khác nhau
+ * giữa các view) để container GIÃN/NỞ mượt thay vì nhảy khựng (S#25).
+ * Kỹ thuật: outer div có height cố định (px, animate qua CSS transition) +
+ * overflow-hidden; inner div height tự nhiên (auto), ResizeObserver theo dõi
+ * inner để cập nhật height của outer mỗi khi nội dung đổi (đổi tab/view).
+ * `measureKey` chỉ để debug/đọc code rõ ràng hơn — logic đo dựa hoàn toàn
+ * vào ResizeObserver nên tự chạy đúng bất kể nội dung đổi vì lý do gì.
+ */
+function AutoHeightPanel({
+  children,
+}: {
+  children: React.ReactNode;
+  /** Nhãn view hiện tại — không dùng trong logic, chỉ để đọc code dễ hơn. */
+  measureKey?: string;
+}) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+
+  useIsomorphicLayoutEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+
+    const applyHeight = () => {
+      outer.style.height = `${inner.offsetHeight}px`;
+    };
+    applyHeight(); // set ngay lúc mount — không animate từ 0.
+
+    const ro = new ResizeObserver(applyHeight);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={outerRef}
+      className="overflow-hidden transition-[height] duration-500 ease-out"
+    >
+      <div ref={innerRef}>{children}</div>
+    </div>
+  );
+}
 
 function TabButton({
   active,
@@ -191,6 +350,11 @@ function Field({
   icon: React.ReactNode;
   required?: boolean;
 }) {
+  // S#24: toggle hiện/ẩn — chỉ áp dụng cho field password.
+  const [show, setShow] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (show ? "text" : "password") : type;
+
   return (
     <label
       htmlFor={id}
@@ -200,28 +364,43 @@ function Field({
       <input
         id={id}
         name={name}
-        type={type}
+        type={inputType}
         required={required}
         placeholder={placeholder}
         className="w-full bg-transparent py-2 text-[#1B1512] outline-none placeholder:text-[#6B655C]/70"
       />
+      {isPassword && (
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          aria-label={show ? "Hide password" : "Show password"}
+          className="shrink-0 text-[#6B655C] transition-colors hover:text-[#1B1512]"
+        >
+          {show ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+        </button>
+      )}
     </label>
   );
 }
 
 function SocialButton({
+  provider,
   label,
   icon,
+  pending,
 }: {
+  provider: "google" | "facebook";
   label: string;
   icon: React.ReactNode;
+  pending: boolean;
 }) {
   return (
     <button
-      type="button"
-      disabled
-      title="Chức năng đang phát triển"
-      className="flex cursor-not-allowed items-center gap-1.5 text-[#6B655C] opacity-70"
+      type="submit"
+      name="provider"
+      value={provider}
+      disabled={pending}
+      className="flex items-center gap-1.5 text-[#6B655C] transition-colors hover:text-[#1B1512] disabled:opacity-60"
     >
       {icon}
       <span>{label}</span>
@@ -314,6 +493,44 @@ function FacebookIcon({ className }: { className?: string }) {
         d="M14 8.5V7c0-.7.3-1 1-1h1.5V3H14c-2.2 0-3.5 1.3-3.5 3.7V8.5H8.5v3h2V21h3.5v-9.5H17l.5-3H14Z"
         fill="currentColor"
       />
+    </svg>
+  );
+}
+
+// S#24 — toggle hiện/ẩn mật khẩu (AuthForm + ResetPasswordForm).
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <path
+        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function EyeOffIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <path
+        d="M6.5 6.6C4 8.3 2 12 2 12s3.5 7 10 7c1.3 0 2.5-.2 3.6-.6M10.6 5.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.9 9.9a3 3 0 0 0 4.2 4.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

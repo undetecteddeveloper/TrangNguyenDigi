@@ -23,9 +23,9 @@ interface ExamFiltersProps {
 
 // Lọc nhanh — 3 ô checkbox NGOÀI dropdown, xếp dọc. Chưa gắn hành vi (để sau).
 const QUICK = [
-  { value: "newest", label: "Mới nhất" },
-  { value: "oldest", label: "Cũ nhất" },
-  { value: "hardest", label: "Khó nhất" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "hardest", label: "Hardest" },
 ];
 
 // rgba khai báo tường minh trong source (theo #Yêu cầu) để làm nổi bật *Filter.
@@ -72,16 +72,19 @@ export function ExamFilters({ subjects, grades, selected }: ExamFiltersProps) {
         />
       )}
 
-      {/* Cả block *Filter STICKY dưới navbar (h-14). shrink-0: tay nắm mảnh cạnh list. */}
+      {/* Cả block *Filter STICKY dưới navbar (h-15). shrink-0: tay nắm mảnh cạnh list.
+          preload order 1 — fade sau navbar (S#21). pt-5 (S#22): edge trên của
+          tay nắm ngang hàng với ExamCard (cột card có py-5). */}
       <div
-        className="sticky top-14 z-20 shrink-0 self-start"
+        className="preload-fade sticky top-15 z-20 shrink-0 self-start pt-5"
+        style={{ "--preload-order": 1 } as React.CSSProperties}
         data-pending={isPending ? "" : undefined}
       >
         <div className="relative">
           {/* Tay nắm (master toggle) — tam giác đen, nhãn dọc. Luôn render = mỏ neo sticky. */}
           <button
             type="button"
-            aria-label="Bộ lọc"
+            aria-label="Filters"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             className="flex flex-col items-center gap-2 rounded-md border-r border-border py-4 pl-3 pr-2.5 transition-colors duration-200 hover:bg-accent"
@@ -99,66 +102,75 @@ export function ExamFilters({ subjects, grades, selected }: ExamFiltersProps) {
               className="eyebrow"
               style={{ writingMode: "vertical-rl" }}
             >
-              Bộ lọc
+              Filters
             </span>
           </button>
 
-          {/* Bảng lọc OVERLAY — absolute từ mép trái, đè lên exam list (không đẩy bố cục). */}
+          {/* Bảng lọc OVERLAY — absolute KỀ MÉP PHẢI tay nắm (left-full, S#22 —
+              không đè lên filter button nữa), đè lên exam list (không đẩy bố cục). */}
           {open && (
             <div
-              className="absolute left-0 top-0 z-20 w-[84vw] max-w-xs border border-border shadow-lg"
+              className="absolute left-full top-0 z-20 w-[84vw] max-w-xs border border-border"
               style={{ backgroundColor: PANEL_BG }}
             >
-              {/* Header bảng: tam giác (đóng) + nhãn + Xoá lọc. */}
-              <button
-                type="button"
-                aria-expanded
-                onClick={() => setOpen(false)}
-                className="flex w-full items-center gap-3 border-b border-border bg-background/60 px-4 py-3"
-              >
-                <Triangle open />
-                <span className="eyebrow">
-                  Bộ lọc{hasFilters ? " · đang lọc" : ""}
-                </span>
-              </button>
+              {/* Header bảng: toggle (nhãn, S#26 bỏ tam giác trong dropdown)
+                  bên trái · nút Clear bên phải ngang hàng tiêu đề (S#22 —
+                  thay nút "Clear filters" cũ ở cuối panel). */}
+              <div className="flex w-full items-center justify-between gap-3 border-b border-border bg-background/60 px-4 py-3">
+                <button
+                  type="button"
+                  aria-expanded
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3"
+                >
+                  <span className="eyebrow">
+                    Filters{hasFilters ? " · active" : ""}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  disabled={!hasFilters}
+                  className="text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-brand hover:underline disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Clear
+                </button>
+              </div>
 
               <FilterRow
-                label="Môn học"
+                label="Subject"
                 selectedLabel={selected.subject}
                 currentValue={selected.subject ?? ""}
                 options={[
-                  { value: "", label: "Tất cả" },
+                  { value: "", label: "All" },
                   ...subjects.map((s) => ({ value: s, label: s })),
                 ]}
                 onSelect={(v) => setParam("subject", v)}
               />
               <FilterRow
-                label="Lớp"
+                label="Grade"
                 selectedLabel={
                   selected.grade !== undefined
-                    ? `Lớp ${selected.grade}`
+                    ? `Grade ${selected.grade}`
                     : undefined
                 }
                 currentValue={
                   selected.grade !== undefined ? String(selected.grade) : ""
                 }
                 options={[
-                  { value: "", label: "Tất cả" },
-                  ...grades.map((g) => ({ value: String(g), label: `Lớp ${g}` })),
+                  { value: "", label: "All" },
+                  ...grades.map((g) => ({
+                    value: String(g),
+                    label: `Grade ${g}`,
+                  })),
                 ]}
                 onSelect={(v) => setParam("grade", v)}
               />
               {/* Tượng trưng — chưa có data (engineer Q1). */}
-              <FilterRow label="Trường" symbolic />
-              <FilterRow label="Năm" symbolic />
-              <FilterRow label="Học kỳ" symbolic />
-              <FilterRow label="Mức độ" symbolic last={!hasFilters} />
-
-              {hasFilters && (
-                <div className="border-t border-border px-4 py-3">
-                  <ClearButton onClick={clearAll} />
-                </div>
-              )}
+              <FilterRow label="School" symbolic />
+              <FilterRow label="Year" symbolic />
+              <FilterRow label="Semester" symbolic />
+              <FilterRow label="Level" symbolic last />
             </div>
           )}
 
@@ -209,6 +221,7 @@ function FilterRow({
 
   return (
     <div className={`relative ${last ? "" : "border-b border-border"}`}>
+      {/* S#26: bỏ tam giác trong dropdown (RowTriangle) — row chỉ còn nhãn. */}
       <button
         type="button"
         aria-expanded={rowOpen}
@@ -223,18 +236,17 @@ function FilterRow({
             </span>
           )}
         </span>
-        <RowTriangle open={rowOpen} />
       </button>
 
       {/* Bảng chọn của filter — OVERLAY absolute (đè row dưới, không xê dịch). */}
       {rowOpen && (
         <div
-          className="absolute inset-x-0 top-full z-30 border-x border-b border-border shadow-md"
+          className="absolute inset-x-0 top-full z-30 border-x border-b border-border"
           style={{ backgroundColor: OPTIONS_BG }}
         >
           {symbolic ? (
             <p className="px-4 py-3 font-serif text-sm italic text-muted-foreground">
-              Đang cập nhật — sẽ có ở phiên bản sau.
+              Coming soon — available in a future release.
             </p>
           ) : (
             <ul className="py-1">
@@ -289,29 +301,4 @@ function Triangle({ open }: { open: boolean }) {
   );
 }
 
-// Tam giác nhỏ cho từng filter: ▼ (đóng) → ▲ (mở).
-function RowTriangle({ open }: { open: boolean }) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 12 12"
-      className={`size-2.5 shrink-0 fill-muted-foreground transition-transform ${
-        open ? "-rotate-90" : "rotate-90"
-      }`}
-    >
-      <path d="M2 1 L10 6 L2 11 Z" />
-    </svg>
-  );
-}
 
-function ClearButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-brand hover:underline"
-    >
-      Xoá lọc
-    </button>
-  );
-}

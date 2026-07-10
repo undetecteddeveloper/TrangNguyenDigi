@@ -36,7 +36,11 @@ export default async function Home({
     <div className="flex h-dvh flex-col overflow-hidden bg-[#1B1512] lg:flex-row">
       <HomeSidebar user={user} authOpen={authMode !== null} />
 
-      <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#EDE1C8] px-6 py-8 sm:px-12 lg:px-16 lg:py-10">
+      {/* preload order 1 — content area fade sau sidebar (S#21). */}
+      <main
+        className="preload-fade relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#EDE1C8] px-6 py-8 sm:px-12 lg:px-16 lg:py-10"
+        style={{ "--preload-order": 1 } as React.CSSProperties}
+      >
         <HeroLines />
         {/* HomeStage có my-auto → tự căn giữa dọc khi content thấp hơn khung. */}
         <HomeStage auth={authMode} />
@@ -73,7 +77,7 @@ function HeroLines() {
           x2={x2}
           y2={y2}
           stroke="#1B1512"
-          strokeOpacity="0.06"
+          strokeOpacity="0.08"
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />

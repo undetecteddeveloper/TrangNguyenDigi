@@ -27,28 +27,37 @@ export default async function ResultDetailPage({
   return (
     <div className="bg-background">
       <main className="mx-auto w-full max-w-2xl px-6 py-8">
-        <header className="flex flex-col gap-2">
-          <span className="eyebrow">Chi tiết bài làm</span>
+        {/* preload order 1–3 — các block fade lần lượt sau navbar (S#21). */}
+        <header
+          className="preload-fade flex flex-col gap-2"
+          style={{ "--preload-order": 1 } as React.CSSProperties}
+        >
+          <span className="eyebrow">Attempt details</span>
           <h1 className="font-serif text-2xl leading-snug text-foreground">
             {examTitle}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Đúng{" "}
             <span className="font-medium text-foreground tabular-nums">
               {result.correct}/{result.total}
             </span>{" "}
-            câu
+            correct
           </p>
         </header>
 
-        <ol className="mt-8 flex flex-col gap-8">
+        <ol
+          className="preload-fade mt-8 flex flex-col gap-8"
+          style={{ "--preload-order": 2 } as React.CSSProperties}
+        >
           {result.perQuestion.map((r, i) => {
             const q = questions[r.questionId];
+            // S#26: correct = XANH LÁ ẤM #4F7942 (fern — hợp tông ngà/sơn mài,
+            // không dùng green neon lạnh); wrong giữ destructive. Green=correct
+            // là convention chuẩn, áp cho mọi marking correct bên dưới.
             const status = r.isCorrect
-              ? { label: "Đúng", cls: "text-brand" }
+              ? { label: "Correct", cls: "text-[#4F7942]" }
               : r.selected
-                ? { label: "Sai", cls: "text-destructive" }
-                : { label: "Bỏ trống", cls: "text-muted-foreground" };
+                ? { label: "Wrong", cls: "text-destructive" }
+                : { label: "Skipped", cls: "text-muted-foreground" };
 
             return (
               <li
@@ -56,7 +65,7 @@ export default async function ResultDetailPage({
                 className="flex flex-col gap-4 border-t border-border pt-6"
               >
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="eyebrow">Câu {i + 1}</span>
+                  <span className="eyebrow">Question {i + 1}</span>
                   <span className={`text-xs font-medium ${status.cls}`}>
                     {status.label}
                   </span>
@@ -76,12 +85,12 @@ export default async function ResultDetailPage({
                       choice.id === r.selected && r.selected !== r.correct;
 
                     const rowCls = isCorrect
-                      ? "border-brand bg-brand/8"
+                      ? "border-[#4F7942] bg-[#4F7942]/10"
                       : isSelectedWrong
                         ? "border-destructive bg-destructive/8"
                         : "border-border bg-card";
                     const badgeCls = isCorrect
-                      ? "border-brand bg-brand text-brand-foreground"
+                      ? "border-[#4F7942] bg-[#4F7942] text-[#EDE1C8]"
                       : isSelectedWrong
                         ? "border-destructive bg-destructive text-brand-foreground"
                         : "border-border text-muted-foreground";
@@ -103,13 +112,13 @@ export default async function ResultDetailPage({
                           className="pt-0.5 text-base leading-relaxed text-card-foreground"
                         />
                         {isCorrect && (
-                          <span className="ml-auto shrink-0 self-center font-mono text-[0.65rem] uppercase tracking-wide text-brand">
-                            Đáp án đúng
+                          <span className="ml-auto shrink-0 self-center font-mono text-[0.65rem] uppercase tracking-wide text-[#4F7942]">
+                            Correct answer
                           </span>
                         )}
                         {isSelectedWrong && (
                           <span className="ml-auto shrink-0 self-center font-mono text-[0.65rem] uppercase tracking-wide text-destructive">
-                            Bạn chọn
+                            Your choice
                           </span>
                         )}
                       </li>
@@ -121,12 +130,15 @@ export default async function ResultDetailPage({
           })}
         </ol>
 
-        <div className="mt-10 border-t border-border pt-6">
+        <div
+          className="preload-fade mt-10 border-t border-border pt-6"
+          style={{ "--preload-order": 3 } as React.CSSProperties}
+        >
           <Link
             href={resultHref}
             className="inline-block rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:border-brand"
           >
-            ← Quay lại kết quả
+            ← Back to results
           </Link>
         </div>
       </main>

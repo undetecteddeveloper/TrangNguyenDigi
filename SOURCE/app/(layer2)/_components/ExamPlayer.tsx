@@ -36,6 +36,17 @@ export function ExamPlayer({
   const [submitting, startSubmit] = useTransition();
   const submittedRef = useRef(false);
 
+  // S#26: chọn đáp án → tự chuyển câu tiếp theo sau delay ngắn (user kịp thấy
+  // selection). Ref + clear chống dồn timeout khi đổi đáp án nhanh; câu cuối
+  // không nhảy (reducer NEXT đã clamp).
+  const advanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (advanceRef.current) clearTimeout(advanceRef.current);
+    },
+    [],
+  );
+
   // Mobile: vuốt trái → câu sau, vuốt phải → câu trước (gắn lên vùng đọc câu hỏi).
   const swipe = useSwipe({ onSwipeLeft: next, onSwipeRight: prev });
 
@@ -73,8 +84,12 @@ export function ExamPlayer({
 
   return (
     <div className="bg-background">
-      {/* Top bar — timer · tên đề (giữa) · flag, sticky ngay dưới SiteHeader (h-14). */}
-      <div className="sticky top-14 z-20 border-b border-border bg-background/90 backdrop-blur">
+      {/* Top bar — timer · tên đề (giữa) · flag, sticky ngay dưới SiteHeader (h-15).
+          preload order 1 — fade sau navbar (S#21). */}
+      <div
+        className="preload-fade sticky top-15 z-20 border-b border-border bg-background/90 backdrop-blur"
+        style={{ "--preload-order": 1 } as React.CSSProperties}
+      >
         <div className="mx-auto grid h-12 w-full max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-6">
           <ExamTimer durationMinutes={durationMinutes} onTimeUp={submit} />
           <span className="truncate text-center font-serif text-sm text-muted-foreground">
@@ -90,18 +105,31 @@ export function ExamPlayer({
       </div>
 
       <main className="mx-auto w-full max-w-2xl px-6 py-10">
-        {/* Vùng đọc câu hỏi — bắt cử chỉ vuốt ngang để chuyển câu trên mobile. */}
-        <div onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
+        {/* Vùng đọc câu hỏi — bắt cử chỉ vuốt ngang để chuyển câu trên mobile.
+            preload order 2 (S#21). */}
+        <div
+          className="preload-fade"
+          style={{ "--preload-order": 2 } as React.CSSProperties}
+          onTouchStart={swipe.onTouchStart}
+          onTouchEnd={swipe.onTouchEnd}
+        >
           <QuestionRenderer
             index={current + 1}
             total={questions.length}
             question={question}
             selectedAnswer={answers[question.id]}
-            onSelectAnswer={(choice) => selectAnswer(question.id, choice)}
+            onSelectAnswer={(choice) => {
+              selectAnswer(question.id, choice);
+              if (advanceRef.current) clearTimeout(advanceRef.current);
+              advanceRef.current = setTimeout(next, 250);
+            }}
           />
         </div>
 
-        <div className="mt-10 border-t border-border pt-6">
+        <div
+          className="preload-fade mt-10 border-t border-border pt-6"
+          style={{ "--preload-order": 3 } as React.CSSProperties}
+        >
           <QuestionPagination
             current={current}
             total={questions.length}
@@ -111,14 +139,16 @@ export function ExamPlayer({
           />
         </div>
 
-        <div className="mt-8 flex flex-col items-center gap-3">
+        <div
+          className="preload-fade mt-8 flex flex-col items-center gap-3"
+          style={{ "--preload-order": 3 } as React.CSSProperties}
+        >
           {remaining > 0 && (
             <p className="text-sm text-muted-foreground">
-              Còn{" "}
               <span className="font-medium text-foreground tabular-nums">
                 {remaining}
               </span>{" "}
-              câu chưa làm.
+              {remaining === 1 ? "question" : "questions"} unanswered.
             </p>
           )}
           <button
@@ -127,7 +157,7 @@ export function ExamPlayer({
             disabled={submitting}
             className="w-full rounded-lg bg-brand px-6 py-3 font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto sm:px-12"
           >
-            {submitting ? "Đang nộp…" : "Nộp bài"}
+            {submitting ? "Submitting…" : "Submit"}
           </button>
         </div>
       </main>

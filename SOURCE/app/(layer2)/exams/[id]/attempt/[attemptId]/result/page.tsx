@@ -28,39 +28,51 @@ export default async function ResultPage({
   return (
     <div className="bg-background">
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-6 py-8">
-        <ScoreCard examTitle={examTitle} result={result} />
+        {/* preload order 1–3 — các block fade lần lượt sau navbar (S#21). */}
+        <div
+          className="preload-fade"
+          style={{ "--preload-order": 1 } as React.CSSProperties}
+        >
+          <ScoreCard examTitle={examTitle} result={result} />
+        </div>
 
         {/* Chủ đề (trái) · Lưu/Chia sẻ + Trở về (phải) — engineer feedback: đổi
             justify-between → justify-start (gap-3 cố định) để 2 nhóm nút bên
             phải nằm SÁT nhau ngay dưới nhau, không bị kéo giãn hở khoảng
             trống theo chiều cao (do items-stretch khớp cột trái cao hơn). */}
-        <div className="grid grid-cols-[1fr_auto] items-stretch gap-4">
+        <div
+          className="preload-fade grid grid-cols-[1fr_auto] items-stretch gap-4"
+          style={{ "--preload-order": 2 } as React.CSSProperties}
+        >
           <TopicBreakdown topics={result.topicBreakdown} />
           <div className="flex w-28 flex-col justify-start gap-3 sm:w-36">
             <ResultActions />
-            {/* Trở về homepage → "/" (placeholder; homepage thật ở UI L1 — Q4). */}
+            {/* Return → ExamBrowser (S#26 — đổi từ Home→"/" cũ). */}
             <Link
-              href="/"
+              href="/exams"
               className="flex items-center justify-center rounded-xl border border-border bg-card px-3 py-4 text-center text-sm text-foreground transition-colors hover:border-brand"
             >
-              Trở về
+              Return
             </Link>
           </div>
         </div>
 
         {/* Nav cuối: Chi tiết (page riêng, Q5) · Làm lại (→ Detail, tạo attempt mới). */}
-        <div className="grid grid-cols-2 gap-3">
+        <div
+          className="preload-fade grid grid-cols-2 gap-3"
+          style={{ "--preload-order": 3 } as React.CSSProperties}
+        >
           <Link
             href={`/exams/${id}/attempt/${attemptId}/result/detail`}
             className="rounded-lg border border-brand bg-brand px-4 py-3 text-center text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
           >
-            Xem chi tiết
+            View details
           </Link>
           <Link
             href={`/exams/${id}`}
             className="rounded-lg border border-border bg-card px-4 py-3 text-center text-sm font-medium text-foreground transition-colors hover:border-brand"
           >
-            Làm lại
+            Try again
           </Link>
         </div>
       </main>

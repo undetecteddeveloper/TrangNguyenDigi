@@ -40,7 +40,7 @@ export function ExamTimer({ durationMinutes, onTimeUp }: ExamTimerProps) {
   return (
     <span
       role="timer"
-      aria-label="Thời gian còn lại"
+      aria-label="Time remaining"
       className={`font-mono text-sm tabular-nums transition-colors ${
         low ? "text-destructive" : "text-muted-foreground"
       }`}
