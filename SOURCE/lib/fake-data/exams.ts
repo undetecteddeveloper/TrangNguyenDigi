@@ -233,6 +233,8 @@ const QUESTIONS: Question[] = [
 
 // --- Đề thi --------------------------------------------------------------
 
+// S#27: school/schoolYear/semester là giá trị DEMO (đa dạng có chủ đích để
+// test đủ nhánh filter — 2 năm khác nhau, cả HK1 lẫn HK2). Engineer đổi tùy ý.
 const EXAMS: Exam[] = [
   {
     id: "exam-toan-10",
@@ -241,6 +243,9 @@ const EXAMS: Exam[] = [
     durationMinutes: 15,
     subject: "Math",
     grade: 10,
+    school: "THPT Trần Phú",
+    schoolYear: 2024,
+    semester: "HK1",
   },
   {
     id: "exam-ly-10",
@@ -249,6 +254,9 @@ const EXAMS: Exam[] = [
     durationMinutes: 15,
     subject: "Physics",
     grade: 10,
+    school: "THPT Nguyễn Huệ",
+    schoolYear: 2024,
+    semester: "HK2",
   },
   {
     id: "exam-hoa-10",
@@ -257,6 +265,9 @@ const EXAMS: Exam[] = [
     durationMinutes: 15,
     subject: "Chemistry",
     grade: 10,
+    school: "THPT Lê Quý Đôn",
+    schoolYear: 2025,
+    semester: "HK1",
   },
 ];
 

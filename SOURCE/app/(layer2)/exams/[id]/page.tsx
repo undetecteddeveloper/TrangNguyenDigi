@@ -40,6 +40,10 @@ export default async function ExamDetailPage({
         >
           <h1 className="text-3xl leading-tight sm:text-4xl">{exam.title}</h1>
 
+          {/* S#28: điền data DB thật vào page — thêm School/Year/Semester
+              (null → "None"). 6 ô = lưới 2×3 đều → bỏ hack căn giữa col-span
+              của ô Difficulty (S#26, chỉ cần khi lẻ ô). Difficulty giữ "—"
+              (tính năng chưa xây — tính từ rating user, tương lai). */}
           <dl className="mt-8 grid w-full max-w-md grid-cols-2 gap-4">
             <div className="rounded-lg border border-border bg-card p-5">
               <dt className="eyebrow">Questions</dt>
@@ -54,11 +58,39 @@ export default async function ExamDetailPage({
                 <span className="text-base text-muted-foreground">min</span>
               </dd>
             </div>
-            {/* Difficulty (S#26) — hàng dưới, CĂN GIỮA (không lệch một bên):
-                span cả 2 cột rồi tự thu về đúng bề rộng 1 cột (50% − nửa gap).
-                Data model chưa có độ khó → giá trị tượng trưng "—" (đồng bộ
-                ExamCard "Level —"), data thật ở milestone sau. */}
-            <div className="col-span-2 w-[calc(50%-0.5rem)] justify-self-center rounded-lg border border-border bg-card p-5">
+            <div className="rounded-lg border border-border bg-card p-5">
+              <dt className="eyebrow">School</dt>
+              <dd
+                className={`mt-2 font-serif text-lg leading-snug ${
+                  exam.school ? "text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {exam.school ?? "None"}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <dt className="eyebrow">Year</dt>
+              <dd
+                className={`mt-2 font-serif text-2xl tabular-nums ${
+                  exam.schoolYear !== undefined
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {exam.schoolYear ?? "None"}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <dt className="eyebrow">Semester</dt>
+              <dd
+                className={`mt-2 font-serif text-2xl ${
+                  exam.semester ? "text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {exam.semester ?? "None"}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-5">
               <dt className="eyebrow">Difficulty</dt>
               <dd className="mt-2 font-serif text-2xl text-muted-foreground">
                 —

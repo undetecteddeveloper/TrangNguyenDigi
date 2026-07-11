@@ -73,8 +73,24 @@ create table if not exists public.exams (
   question_ids     text[] not null,               -- thứ tự câu hỏi trong đề
   duration_minutes int  not null,
   subject          text not null,
-  grade            int  not null
+  grade            int  not null,
+  -- S#27: metadata cho Filter/ExamCard (School/Year/Semester + sort Newest/Oldest).
+  school           text,                          -- trường biên soạn/nguồn đề (free-text)
+  school_year      int,                           -- niên khóa ra đề, vd 2024
+  semester         text,                          -- 'HK1' | 'HK2' (constraint bên dưới)
+  created_at       timestamptz not null default now()
 );
+
+-- S#27 migration — DB đã tồn tại từ trước KHÔNG nhận cột mới qua
+-- `create table if not exists` → ALTER riêng, idempotent.
+alter table public.exams add column if not exists school text;
+alter table public.exams add column if not exists school_year int;
+alter table public.exams add column if not exists semester text;
+alter table public.exams add column if not exists created_at timestamptz not null default now();
+
+alter table public.exams drop constraint if exists exams_semester_check;
+alter table public.exams add constraint exams_semester_check
+  check (semester is null or semester in ('HK1', 'HK2'));
 
 -- ----------------------------------------------------------------------------
 -- Logic L2 — Core Loop: attempts, answers, results

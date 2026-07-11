@@ -24,10 +24,13 @@ export function ExamCard({ exam }: { exam: Exam }) {
           {exam.title}
         </h3>
 
-        {/* (Nội dung) — tượng trưng theo template; data thật ở milestone sau. */}
+        {/* S#27: School data thật từ DB — null → "None" (S#28 Q2). Level giữ
+            "—" (tính năng chưa xây — tính từ rating user, tương lai). */}
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt className="text-[var(--block-fg-muted)]">School</dt>
-          <dd className="text-[var(--block-fg-muted)]">—</dd>
+          <dd className="text-[var(--block-fg-muted)]">
+            {exam.school ?? "None"}
+          </dd>
           <dt className="text-[var(--block-fg-muted)]">Level</dt>
           <dd className="text-[var(--block-fg-muted)]">—</dd>
         </dl>

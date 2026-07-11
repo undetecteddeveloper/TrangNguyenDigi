@@ -12,4 +12,10 @@ export interface Exam {
   subject: string;
   /** Cấp lớp 6–12 — hiển thị trên ExamCard. */
   grade: number;
+  /** Trường biên soạn/nguồn đề (free-text) — S#27, nullable trong DB. */
+  school?: string;
+  /** Niên khóa ra đề (vd 2024) — S#27, nullable trong DB. */
+  schoolYear?: number;
+  /** Học kỳ ra đề: 'HK1' | 'HK2' — S#27, nullable trong DB. */
+  semester?: string;
 }

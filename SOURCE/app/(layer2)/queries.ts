@@ -17,7 +17,14 @@ type ExamRow = {
   duration_minutes: number;
   subject: string;
   grade: number;
+  school: string | null;
+  school_year: number | null;
+  semester: string | null;
 };
+
+// Cột đề dùng chung cho mọi query exams (S#27: thêm school/school_year/semester).
+const EXAM_COLUMNS =
+  "id, title, question_ids, duration_minutes, subject, grade, school, school_year, semester";
 
 function toExam(row: ExamRow): Exam {
   return {
@@ -27,46 +34,88 @@ function toExam(row: ExamRow): Exam {
     durationMinutes: row.duration_minutes,
     subject: row.subject,
     grade: row.grade,
+    school: row.school ?? undefined,
+    schoolYear: row.school_year ?? undefined,
+    semester: row.semester ?? undefined,
   };
 }
 
 // --- Reads ----------------------------------------------------------------
 
+/** Sort cho Exam Browser: theo created_at. "hardest" TẠM BỎ QUA (chờ rating). */
+export type ExamSort = "newest" | "oldest";
+
 export interface ExamFilters {
   subject?: string;
   grade?: number;
+  school?: string;
+  schoolYear?: number;
+  semester?: string;
+  sort?: ExamSort;
 }
 
-/** Đề cho Exam Browser, lọc tuỳ chọn theo môn/lớp (GĐ 3 M3.1). */
+/** Đề cho Exam Browser, lọc tuỳ chọn theo môn/lớp/trường/niên khóa/học kỳ (S#27). */
 export async function listExams(filters?: ExamFilters): Promise<Exam[]> {
   const supabase = await createClient();
-  let query = supabase
-    .from("exams")
-    .select("id, title, question_ids, duration_minutes, subject, grade")
-    .order("id");
+  let query = supabase.from("exams").select(EXAM_COLUMNS);
   if (filters?.subject) query = query.eq("subject", filters.subject);
   if (filters?.grade !== undefined && !Number.isNaN(filters.grade)) {
     query = query.eq("grade", filters.grade);
   }
+  if (filters?.school) query = query.eq("school", filters.school);
+  if (filters?.schoolYear !== undefined && !Number.isNaN(filters.schoolYear)) {
+    query = query.eq("school_year", filters.schoolYear);
+  }
+  if (filters?.semester) query = query.eq("semester", filters.semester);
+  // Newest/Oldest theo created_at; mặc định giữ order id (ổn định như trước).
+  if (filters?.sort === "newest") {
+    query = query.order("created_at", { ascending: false });
+  } else if (filters?.sort === "oldest") {
+    query = query.order("created_at", { ascending: true });
+  } else {
+    query = query.order("id");
+  }
   const { data, error } = await query;
   if (error) throw error;
-  return (data as ExamRow[]).map(toExam);
+  return (data as unknown as ExamRow[]).map(toExam);
 }
 
-/** Giá trị môn/lớp khả dụng để dựng bộ lọc (distinct, đã sort). */
+/** Giá trị khả dụng để dựng bộ lọc (distinct, đã sort) — S#27 thêm school/year/semester. */
 export async function listExamFacets(): Promise<{
   subjects: string[];
   grades: number[];
+  schools: string[];
+  years: number[];
+  semesters: string[];
 }> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("exams").select("subject, grade");
+  const { data, error } = await supabase
+    .from("exams")
+    .select("subject, grade, school, school_year, semester");
   if (error) throw error;
-  const rows = data as { subject: string; grade: number }[];
+  const rows = data as unknown as {
+    subject: string;
+    grade: number;
+    school: string | null;
+    school_year: number | null;
+    semester: string | null;
+  }[];
   const subjects = [...new Set(rows.map((r) => r.subject))].sort((a, b) =>
     a.localeCompare(b, "vi"),
   );
   const grades = [...new Set(rows.map((r) => r.grade))].sort((a, b) => a - b);
-  return { subjects, grades };
+  const schools = [
+    ...new Set(rows.map((r) => r.school).filter((s): s is string => s !== null)),
+  ].sort((a, b) => a.localeCompare(b, "vi"));
+  const years = [
+    ...new Set(
+      rows.map((r) => r.school_year).filter((y): y is number => y !== null),
+    ),
+  ].sort((a, b) => b - a); // năm mới nhất lên đầu
+  const semesters = [
+    ...new Set(rows.map((r) => r.semester).filter((s): s is string => s !== null)),
+  ].sort();
+  return { subjects, grades, schools, years, semesters };
 }
 
 /** Một đề theo id, hoặc null nếu không tồn tại. */
@@ -74,11 +123,11 @@ export async function getExam(id: string): Promise<Exam | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("exams")
-    .select("id, title, question_ids, duration_minutes, subject, grade")
+    .select(EXAM_COLUMNS)
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
-  return data ? toExam(data as ExamRow) : null;
+  return data ? toExam(data as unknown as ExamRow) : null;
 }
 
 /**

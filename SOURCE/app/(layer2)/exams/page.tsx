@@ -8,11 +8,19 @@
 //    (khớp bề ngang navbar) để lưới hiển thị tới 3 card/hàng.
 // Visual language "tờ giấy trắng / focused". Bộ lọc qua URL searchParams → re-query.
 
-import { listExams, listExamFacets } from "@/app/(layer2)/queries";
+import { listExams, listExamFacets, type ExamSort } from "@/app/(layer2)/queries";
 import { ExamBrowser } from "@/app/(layer2)/_components/ExamBrowser";
 import { ExamFilters } from "@/app/(layer2)/_components/ExamFilters";
 
-type SearchParams = Promise<{ subject?: string; grade?: string }>;
+type SearchParams = Promise<{
+  subject?: string;
+  grade?: string;
+  school?: string;
+  year?: string;
+  semester?: string;
+  sort?: string;
+  hardest?: string;
+}>;
 
 export default async function ExamsPage({
   searchParams,
@@ -22,9 +30,18 @@ export default async function ExamsPage({
   const sp = await searchParams;
   const subject = sp.subject || undefined;
   const grade = sp.grade ? Number(sp.grade) : undefined;
+  const school = sp.school || undefined;
+  const year = sp.year ? Number(sp.year) : undefined;
+  const semester = sp.semester || undefined;
+  // Chỉ nhận giá trị sort hợp lệ. Hardest (S#28) là param RIÊNG độc lập với
+  // sort — chỉ giữ state UI checkbox, KHÔNG truyền vào listExams (chưa có data
+  // độ khó để sắp xếp — chờ tính năng rating).
+  const sort: ExamSort | undefined =
+    sp.sort === "newest" || sp.sort === "oldest" ? sp.sort : undefined;
+  const hardest = sp.hardest === "1";
 
   const [exams, facets] = await Promise.all([
-    listExams({ subject, grade }),
+    listExams({ subject, grade, school, schoolYear: year, semester, sort }),
     listExamFacets(),
   ]);
 
@@ -39,7 +56,12 @@ export default async function ExamsPage({
           <ExamFilters
             subjects={facets.subjects}
             grades={facets.grades}
-            selected={{ subject, grade }}
+            schools={facets.schools}
+            years={facets.years}
+            semesters={facets.semesters}
+            selected={{ subject, grade, school, year, semester }}
+            sort={sort}
+            hardest={hardest}
           />
 
           {/* preload order 2 — lưới card fade sau navbar (0) + filter (1) (S#21). */}

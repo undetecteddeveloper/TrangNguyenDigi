@@ -12,9 +12,11 @@ import { useEffect, useRef, useTransition } from "react";
 import { submitExam } from "@/app/(layer2)/actions";
 import { ExamTimer } from "./ExamTimer";
 import { FlagButton } from "./FlagButton";
+import { LeaveExamDialog } from "./LeaveExamDialog";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { QuestionPagination } from "./QuestionPagination";
 import { useExamPlayer } from "@/hooks/useExamPlayer";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { useSwipe } from "@/hooks/useSwipe";
 import type { PublicQuestion } from "@/types/question";
 
@@ -35,6 +37,11 @@ export function ExamPlayer({
     useExamPlayer(questions.length);
   const [submitting, startSubmit] = useTransition();
   const submittedRef = useRef(false);
+
+  // S#28: cảnh báo rời trang khi đang làm bài — chặn click nav trong app
+  // (modal tuỳ biến) + refresh/đóng tab (beforeunload). Tắt khi đang submit
+  // để không tự chặn luồng redirect sang /result.
+  const { pendingHref, cancelLeave, confirmLeave } = useLeaveGuard(!submitting);
 
   // S#26: chọn đáp án → tự chuyển câu tiếp theo sau delay ngắn (user kịp thấy
   // selection). Ref + clear chống dồn timeout khi đổi đáp án nhanh; câu cuối
@@ -84,6 +91,13 @@ export function ExamPlayer({
 
   return (
     <div className="bg-background">
+      {/* S#28: modal xác nhận rời trang (mở khi guard chặn một click nav). */}
+      <LeaveExamDialog
+        open={pendingHref !== null}
+        onCancel={cancelLeave}
+        onLeave={confirmLeave}
+      />
+
       {/* Top bar — timer · tên đề (giữa) · flag, sticky ngay dưới SiteHeader (h-15).
           preload order 1 — fade sau navbar (S#21). */}
       <div

@@ -59,13 +59,20 @@ async function main() {
     topic: q.topic,
   }));
 
-  const examRows = exams.map((e) => ({
+  // S#27: created_at set lệch ngày theo thứ tự đề (đề sau = mới hơn) để sort
+  // Newest/Oldest phân biệt được — 3 đề seed cùng lúc sẽ có timestamp trùng nhau.
+  const SEED_BASE = Date.parse("2026-07-01T00:00:00Z");
+  const examRows = exams.map((e, i) => ({
     id: e.id,
     title: e.title,
     question_ids: e.questionIds,
     duration_minutes: e.durationMinutes,
     subject: e.subject,
     grade: e.grade,
+    school: e.school ?? null,
+    school_year: e.schoolYear ?? null,
+    semester: e.semester ?? null,
+    created_at: new Date(SEED_BASE + i * 86_400_000).toISOString(),
   }));
 
   // questions trước (exams tham chiếu chúng qua question_ids).
