@@ -2,16 +2,15 @@
 // Giữ state làm bài qua useExamPlayer (useReducer — tracer code M1.5): câu, đáp án, flag.
 // Nộp bài gọi submitExam() Server Action (batch on submit, Q2=A) — action tự redirect.
 // Task 3: ExamTimer đếm ngược → hết giờ auto-submit (PA A); FlagButton đánh dấu câu.
-// Visual "focus mode" (UI-LAYER-MAP 4.2): SiteHeader (từ (layer2)/layout.tsx,
-// KHÔNG render ở đây) + top bar sticky (timer · tên đề · flag), nội dung căn
-// giữa cột hẹp, không sidebar/distraction.
+// Layout đồng bộ TEMPLATE/L2/ExamPage (redesign UI-only — logic/hooks giữ nguyên):
+// header (tên đề + đồng hồ + nút Nộp bài) → 2 cột (card câu hỏi trái, sidebar
+// điều hướng phải). SiteHeader (navbar) vẫn từ (layer2)/layout.tsx.
 // M3.2 Task 1: mobile vuốt trái/phải chuyển câu (useSwipe); desktop dùng phím ← → .
 "use client";
 
 import { useEffect, useRef, useTransition } from "react";
 import { submitExam } from "@/app/(layer2)/actions";
 import { ExamTimer } from "./ExamTimer";
-import { FlagButton } from "./FlagButton";
 import { LeaveExamDialog } from "./LeaveExamDialog";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { QuestionPagination } from "./QuestionPagination";
@@ -78,7 +77,6 @@ export function ExamPlayer({
   const flaggedIndices = questions
     .map((q, i) => (flags[q.id] ? i : -1))
     .filter((i) => i >= 0);
-  const remaining = questions.length - answeredIndices.length;
 
   // Nộp bài — chống gọi trùng (nút thủ công + auto-submit hết giờ).
   function submit() {
@@ -98,81 +96,90 @@ export function ExamPlayer({
         onLeave={confirmLeave}
       />
 
-      {/* Top bar — timer · tên đề (giữa) · flag, sticky ngay dưới SiteHeader (h-15).
-          preload order 1 — fade sau navbar (S#21). */}
-      <div
-        className="preload-fade sticky top-15 z-20 border-b border-border bg-background/90 backdrop-blur"
-        style={{ "--preload-order": 1 } as React.CSSProperties}
-      >
-        <div className="mx-auto grid h-12 w-full max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-6">
-          <ExamTimer durationMinutes={durationMinutes} onTimeUp={submit} />
-          <span className="truncate text-center font-serif text-sm text-muted-foreground">
-            {examTitle}
-          </span>
-          <div className="flex justify-end">
-            <FlagButton
-              flagged={Boolean(flags[question.id])}
-              onToggle={() => toggleFlag(question.id)}
-            />
+      <main className="mx-auto flex w-full max-w-[1100px] flex-col gap-6 px-6 py-10">
+        {/* Header — tên đề (trái) · đồng hồ + nút Nộp bài (phải). Không sticky:
+            khu vực trả lời đã tự cuộn trong khung 238px (QuestionRenderer) nên
+            trang hiếm khi cần cuộn dài. preload order 1 — fade sau navbar (S#21). */}
+        <div
+          className="preload-fade flex flex-wrap items-end justify-between gap-4"
+          style={{ "--preload-order": 1 } as React.CSSProperties}
+        >
+          <div>
+            <h1 className="font-serif text-2xl font-semibold text-foreground sm:text-3xl">
+              {examTitle}
+            </h1>
+            <div className="mt-3 h-0.5 w-10 bg-ring" />
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="min-w-[130px] rounded-md border border-border px-4 py-2 text-center">
+              <span className="eyebrow block">Time remaining</span>
+              <ExamTimer durationMinutes={durationMinutes} onTimeUp={submit} />
+            </div>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={submitting}
+              className="rounded-md bg-brand px-5 py-3 text-xs font-medium tracking-[0.04em] text-brand-foreground uppercase transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? "Submitting…" : "Submit"}
+            </button>
           </div>
         </div>
-      </div>
 
-      <main className="mx-auto w-full max-w-2xl px-6 py-10">
-        {/* Vùng đọc câu hỏi — bắt cử chỉ vuốt ngang để chuyển câu trên mobile.
+        {/* Khu vực chính — card câu hỏi (trái) + sidebar điều hướng (phải).
             preload order 2 (S#21). */}
         <div
-          className="preload-fade"
+          className="preload-fade flex flex-wrap items-start gap-6"
           style={{ "--preload-order": 2 } as React.CSSProperties}
-          onTouchStart={swipe.onTouchStart}
-          onTouchEnd={swipe.onTouchEnd}
         >
-          <QuestionRenderer
-            index={current + 1}
-            total={questions.length}
-            question={question}
-            selectedAnswer={answers[question.id]}
-            onSelectAnswer={(choice) => {
-              selectAnswer(question.id, choice);
-              if (advanceRef.current) clearTimeout(advanceRef.current);
-              advanceRef.current = setTimeout(next, 250);
-            }}
-          />
-        </div>
-
-        <div
-          className="preload-fade mt-10 border-t border-border pt-6"
-          style={{ "--preload-order": 3 } as React.CSSProperties}
-        >
-          <QuestionPagination
-            current={current}
-            total={questions.length}
-            answeredIndices={answeredIndices}
-            flaggedIndices={flaggedIndices}
-            onJump={goto}
-          />
-        </div>
-
-        <div
-          className="preload-fade mt-8 flex flex-col items-center gap-3"
-          style={{ "--preload-order": 3 } as React.CSSProperties}
-        >
-          {remaining > 0 && (
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground tabular-nums">
-                {remaining}
-              </span>{" "}
-              {remaining === 1 ? "question" : "questions"} unanswered.
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={submit}
-            disabled={submitting}
-            className="w-full rounded-lg bg-brand px-6 py-3 font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto sm:px-12"
+          {/* Vùng đọc câu hỏi — bắt cử chỉ vuốt ngang để chuyển câu trên mobile. */}
+          <div
+            className="min-w-0 flex-1 basis-[480px]"
+            onTouchStart={swipe.onTouchStart}
+            onTouchEnd={swipe.onTouchEnd}
           >
-            {submitting ? "Submitting…" : "Submit"}
-          </button>
+            <QuestionRenderer
+              index={current + 1}
+              question={question}
+              selectedAnswer={answers[question.id]}
+              onSelectAnswer={(choice) => {
+                selectAnswer(question.id, choice);
+                if (advanceRef.current) clearTimeout(advanceRef.current);
+                advanceRef.current = setTimeout(next, 250);
+              }}
+              flagged={Boolean(flags[question.id])}
+              onToggleFlag={() => toggleFlag(question.id)}
+            />
+
+            <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={prev}
+                disabled={current === 0}
+                className="rounded-md border border-border px-4 py-2.5 text-xs font-medium tracking-[0.04em] text-foreground uppercase transition-colors hover:border-ring disabled:cursor-default disabled:opacity-40 disabled:hover:border-border"
+              >
+                ← Previous
+              </button>
+              <button
+                type="button"
+                onClick={next}
+                disabled={current === questions.length - 1}
+                className="rounded-md border border-border px-4 py-2.5 text-xs font-medium tracking-[0.04em] text-foreground uppercase transition-colors hover:border-ring disabled:cursor-default disabled:opacity-40 disabled:hover:border-border"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full basis-[260px] sm:min-w-[240px] sm:w-auto">
+            <QuestionPagination
+              current={current}
+              total={questions.length}
+              answeredIndices={answeredIndices}
+              flaggedIndices={flaggedIndices}
+              onJump={goto}
+            />
+          </div>
         </div>
       </main>
     </div>

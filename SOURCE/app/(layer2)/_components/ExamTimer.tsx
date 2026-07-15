@@ -1,7 +1,8 @@
 // ExamTimer — đồng hồ đếm ngược cho Exam Player (Layer 2). GĐ 3 M3.1 Task 3.
 // Đếm từ `durationMinutes` về 0; hết giờ → gọi `onTimeUp` (ExamPlayer auto-submit, PA A).
-// Hiển thị MM:SS dạng mono, KHÔNG nhấp nháy (UI-LAYER-MAP 4.2) — chỉ đổi màu cảnh
-// báo ở phút cuối. Đếm bằng setTimeout từng giây để tránh dồn tick khi tab nền.
+// Hiển thị MM:SS dạng serif (đồng bộ TEMPLATE/L2/ExamPage), KHÔNG nhấp nháy
+// (UI-LAYER-MAP 4.2) — chỉ đổi màu cảnh báo ở phút cuối. Đếm bằng setTimeout
+// từng giây để tránh dồn tick khi tab nền.
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -41,8 +42,8 @@ export function ExamTimer({ durationMinutes, onTimeUp }: ExamTimerProps) {
     <span
       role="timer"
       aria-label="Time remaining"
-      className={`font-mono text-sm tabular-nums transition-colors ${
-        low ? "text-destructive" : "text-muted-foreground"
+      className={`font-serif text-2xl font-semibold tabular-nums transition-colors ${
+        low ? "text-destructive" : "text-foreground"
       }`}
     >
       {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}

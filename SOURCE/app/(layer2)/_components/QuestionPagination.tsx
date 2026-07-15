@@ -1,8 +1,8 @@
-// QuestionPagination — điều hướng giữa các câu (Layer 2). GĐ 3 M3.1 Task 2–3.
-// Mỗi câu là một ô vuông: chưa làm = hairline mờ, đã làm = nền brand mờ,
-// đang xem = brand solid. Câu đã đánh dấu (flag) có chấm nhỏ ở góc trên-phải.
-// Điều hướng chỉ qua các ô (nút prev/next đã bỏ — engineer).
-// (Swipe cho mobile — UI-LAYER-MAP 8.2 — xử lý ở task responsive sau.)
+// QuestionPagination — sidebar điều hướng giữa các câu (Layer 2). GĐ 3 M3.1 Task 2–3.
+// Đồng bộ TEMPLATE/L2/ExamPage: card hairline bo góc 8px, lưới 4 cột, mỗi câu
+// một ô vuông — đang xem = viền 2px accent, đã làm = nền brand, chưa làm =
+// hairline; câu đánh dấu có chấm nhỏ ở góc trên-phải.
+// (Swipe cho mobile — UI-LAYER-MAP 8.2 — xử lý ở ExamPlayer.)
 
 interface QuestionPaginationProps {
   current: number; // index 0-based của câu đang xem
@@ -25,43 +25,44 @@ export function QuestionPagination({
   const flagged = new Set(flaggedIndices);
 
   return (
-    <nav>
-      <ol className="flex flex-wrap gap-2">
-        {Array.from({ length: total }, (_, i) => {
-          const isCurrent = i === current;
-          const isAnswered = answered.has(i);
-          const isFlagged = flagged.has(i);
-          return (
-            <li key={i}>
-              <button
-                type="button"
-                onClick={() => onJump(i)}
-                aria-current={isCurrent ? "true" : undefined}
-                aria-label={`Question ${i + 1}${isAnswered ? " (answered)" : ""}${
-                  isFlagged ? " (flagged)" : ""
-                }`}
-                className={`relative flex size-9 items-center justify-center rounded-md border text-sm tabular-nums transition-colors ${
-                  isCurrent
-                    ? "border-brand bg-brand text-brand-foreground"
-                    : isAnswered
-                      ? "border-brand/30 bg-brand/8 text-foreground hover:border-brand"
-                      : "border-border text-muted-foreground hover:border-brand/40 hover:text-foreground"
-                }`}
-              >
-                {i + 1}
-                {isFlagged && (
-                  <span
-                    aria-hidden
-                    className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-background ${
-                      isCurrent ? "bg-background" : "bg-brand"
-                    }`}
-                  />
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
+    <div className="rounded-lg border border-border p-5">
+      <div className="eyebrow mb-3.5">Questions</div>
+      <nav>
+        <ol className="grid grid-cols-4 gap-2">
+          {Array.from({ length: total }, (_, i) => {
+            const isCurrent = i === current;
+            const isAnswered = answered.has(i);
+            const isFlagged = flagged.has(i);
+            return (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => onJump(i)}
+                  aria-current={isCurrent ? "true" : undefined}
+                  aria-label={`Question ${i + 1}${isAnswered ? " (answered)" : ""}${
+                    isFlagged ? " (flagged)" : ""
+                  }`}
+                  className={`relative flex aspect-square w-full items-center justify-center rounded text-sm tabular-nums transition-colors ${
+                    isCurrent
+                      ? "border-2 border-ring text-foreground"
+                      : isAnswered
+                        ? "border border-transparent bg-brand text-brand-foreground hover:opacity-90"
+                        : "border border-border text-muted-foreground hover:border-ring/50 hover:text-foreground"
+                  }`}
+                >
+                  {i + 1}
+                  {isFlagged && (
+                    <span
+                      aria-hidden
+                      className="absolute -top-1 -right-1 size-2 rounded-full bg-ring ring-2 ring-background"
+                    />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    </div>
   );
 }
