@@ -3,7 +3,7 @@
 // Chạy SAU `next build`:  node scripts/check-ai-key-bundle.mjs
 // (script npm: `npm run check:bundle` — build trước rồi check).
 //
-// Cơ chế: quét .next/static (mọi thứ ship xuống browser) tìm
+// Cơ chế: quét .next-build/static (mọi thứ ship xuống browser) tìm
 //   1) giá trị GEMINI_API_KEY thật (đọc từ env/.env.local nếu có),
 //   2) các marker chỉ xuất hiện khi module server-only bị bundle nhầm:
 //      "GEMINI_API_KEY", "@google/genai", "generativelanguage.googleapis.com".
@@ -14,7 +14,8 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const STATIC_DIR = join(ROOT, ".next", "static");
+// `.next-build` — production distDir tách riêng khỏi dev (next.config.ts S#36).
+const STATIC_DIR = join(ROOT, ".next-build", "static");
 
 function loadEnvLocal() {
   const p = join(ROOT, ".env.local");

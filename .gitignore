@@ -1,5 +1,6 @@
 # Next.js
 SOURCE/.next/
+SOURCE/.next-build/
 SOURCE/node_modules/
 SOURCE/out/
 SOURCE/build/
@@ -17,6 +18,7 @@ SOURCE/next-env.d.ts
 .DS_Store
 *.pem
 Thumbs.db
+~$*
 
 # Screenshots tạm
 TEMP_SCREENSHOT/*

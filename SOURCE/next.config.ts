@@ -2,6 +2,12 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Tách output prod/dev (S#36): `next build` (NODE_ENV=production) ghi vào
+  // `.next-build`, `next dev` giữ `.next`. Trước đây build production đè lên
+  // `.next` của dev server → trạng thái trộn lẫn từng làm dev server chết /
+  // lỗi manifest (gotcha đã ghi trong PROCESS). `next start` cũng chạy với
+  // NODE_ENV=production nên đọc đúng `.next-build`.
+  distDir: process.env.NODE_ENV === "production" ? ".next-build" : ".next",
   // Root nằm ở thư mục cha (TrangNguyenDigi) để Turbopack/next-font đọc được
   // font trong `ASSETS/` — theo UI-LAYER-MAP Mục 11 (static asset sống ở ASSETS/).
   turbopack: {

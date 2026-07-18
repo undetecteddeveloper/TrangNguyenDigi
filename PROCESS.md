@@ -3242,3 +3242,31 @@ Engineer đã dán `schema.sql` (có §8c) vào Supabase SQL Editor + Run, rồi
 ## Cách chạy lại query Gate A (ghi để nhớ)
 1. Copy toàn bộ `SOURCE/supabase/schema.sql` → Supabase Dashboard → SQL Editor → Run (idempotent, dán lại an toàn). Bắt buộc mỗi khi sửa schema.
 2. `cd SOURCE` rồi `npx tsx supabase/test-rls.ts` (script tự đọc `SOURCE/.env.local`, đủ 3 key URL/ANON/SERVICE_ROLE — không cần export shell; `tsx` chưa cài local nên npx tự tải bản tạm).
+
+---
+
+# [UGC v2.1] — Sự cố "Failed to fetch" + GATE D XANH + tách distDir prod/dev (S#36, 2026-07-18)
+
+## Sự cố & chẩn đoán
+Engineer upload 2 PDF fixture ở `/upload` → browser báo `TypeError: Failed to fetch` tại `fetchServerAction`. Rà theo giả thuyết:
+- ❌ Bug pipeline (mupdf/sharp/body-limit/Gemini) — LOẠI: agent tái hiện y hệt (đăng nhập test account, upload đúng 2 file đó qua Playwright) → pipeline chạy trọn 8/8 bước trong 11.58s, redirect màn review thành công.
+- ❌ Native crash node.exe — LOẠI: Windows Error Reporting không có record.
+- ✅ **Nguyên nhân lõi: dev server của engineer ĐÃ CHẾT tại thời điểm bấm Extract** — curl :3000 → HTTP 000, netstat không có listener; log `.next/dev/logs/next-development.log` dừng đột ngột ở giây 18 (không kịp ghi GET /upload). "Failed to fetch" = browser không kết nối được server, không phải lỗi HTTP từ app.
+- Điều kiện nghi vấn nhất: server 09:58 khởi động đè lên `.next` đang chứa **production build** (S#35 chạy `next build` verify mà không dọn) — đúng gotcha trộn prod/dev đã ghi trong PROCESS/memory từ trước.
+
+## ✅ GATE D XANH (kill criterion B1 đạt) — 2026-07-18
+Trên fixture PDF thật (đề 3 phần, 5 câu, 1 hình tam giác vẽ vector): `extractQuestions` nhận diện **5 câu / 3 phần đúng cấu trúc**, bbox `box2d` phát hiện **1/1 hình** (phần 1 câu 2) → crop & lưu OK (3KB). So với 0/21 trước ADR-0006 — giao thức native Gemini hoạt động. Toàn bộ đáp án ghép khớp 100% file đáp án (C, A / Đ-Đ-Đ-S / 4, 40), LaTeX transcribe đúng, trạng thái cuối `review`, màn S-03 render đủ (nhóm phần, hình, 3 loại editor). **Một phần lớn của e2e Task 7/E1 coi như đã chạy: upload→extract→review OK qua browser thật.**
+
+## Fix bền vững: tách distDir prod/dev
+- `next.config.ts`: `distDir = NODE_ENV==="production" ? ".next-build" : ".next"` — `next build`/`next start` dùng `.next-build`, `next dev` giữ `.next`. Gotcha "kill server → build → rm -rf .next → dev" bị loại BỎ TẬN GỐC (2 bên không còn giẫm nhau; không cần dọn thủ công nữa).
+- `scripts/check-ai-key-bundle.mjs`: quét `.next-build/static` (bundle production thật).
+- `.gitignore` (root + SOURCE): thêm `.next-build/`.
+- `tsconfig.json`: Next build tự append include `.next-build/types/**` (hành vi chuẩn, commit kèm).
+- Verify: build → chỉ tạo `.next-build` (`.next` không bị đụng); `check:bundle` PASS; dev server mới → `.next` chỉ có `dev/`; site chạy đủ (/, /upload, /me/exams, màn review).
+
+## Fixture PDF (tạo ở S#35b, đang ở root repo — UNTRACKED)
+`de_kiem_tra_toan.pdf` (đề: PHẦN I 2 mcq [câu 2 có hình tam giác], PHẦN II 1 true_false 4 ý, PHẦN III 2 short_answer) + `dap_an_toan.pdf` (đáp án: C, A / Đ-Đ-Đ-S / 4, 40). Tạo bằng fpdf2 (script trong scratchpad phiên; gotcha fpdf2: phải `set_x(l_margin)` trước mỗi `multi_cell` width=0). Dùng làm fixture chuẩn cho Gate D/E1 — cân nhắc commit vào repo nếu muốn giữ lâu dài.
+
+## CÒN NỢ sau S#36
+- Task 7/E1 phần còn lại: a11y (axe/keyboard) S-01/02/03; e2e đoạn publish→attempt→report (upload→extract→review ĐÃ pass); AC-027 count; OCR trên ảnh CHỤP/scan thật (fixture hiện là PDF text sạch).
+- Nhắc vận hành: nếu gặp "Failed to fetch" → kiểm tra terminal dev server còn sống trước tiên (`curl localhost:3000`).
