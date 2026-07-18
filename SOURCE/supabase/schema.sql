@@ -205,3 +205,260 @@ create policy "results_select_own" on public.exam_results
 drop policy if exists "results_insert_own" on public.exam_results;
 create policy "results_insert_own" on public.exam_results
   for insert with check (user_id = auth.uid());
+
+-- ============================================================================
+-- UGC Exam Upload v2.0 (ADR-0001/0003, Design Doc §Schema & DB Enforcement)
+-- Lifecycle + authorship + source files. Idempotent.
+-- KHÔNG có admin: không is_admin(), không cap trigger, không role trigger.
+-- Thứ tự: cột/constraint → exam_reports → SELECT policies thay thế →
+--         WRITE policies tác giả → profiles with check → Storage policies →
+--         BACKFILL CUỐI CÙNG.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 1. exams — cột lifecycle/tác giả/file nguồn + CHECK status
+-- ----------------------------------------------------------------------------
+alter table public.exams add column if not exists status text not null default 'processing';
+alter table public.exams add column if not exists author_id uuid references auth.users(id);
+alter table public.exams add column if not exists author_display_name text;   -- ADR-0003: snapshot tên tác giả
+alter table public.exams add column if not exists reviewed_at timestamptz;    -- set khi publish
+alter table public.exams add column if not exists question_file_path text;    -- path trong exam-uploads (nguồn re-run)
+alter table public.exams add column if not exists answer_file_path text;
+
+alter table public.exams drop constraint if exists exams_status_check;
+alter table public.exams add constraint exams_status_check
+  check (status in ('processing','review','draft','published','failed'));
+
+-- ----------------------------------------------------------------------------
+-- 2. questions — cột mới (seeded rows nhận default, không đổi dữ liệu)
+-- ----------------------------------------------------------------------------
+alter table public.questions add column if not exists question_type text not null default 'mcq';
+alter table public.questions add column if not exists image_url text;         -- URL Storage của hình đã crop
+alter table public.questions add column if not exists essay_answer text;      -- đáp án mẫu cho essay; null với mcq
+
+alter table public.questions drop constraint if exists questions_type_check;
+alter table public.questions add constraint questions_type_check
+  check (question_type in ('mcq','essay'));
+-- Đáp án MCQ vẫn ở correct_answer (CHECK A–D giữ nguyên); essay dùng essay_answer.
+
+-- ----------------------------------------------------------------------------
+-- 3. exam_reports — báo cáo nội dung (1 report / user / exam)
+-- ----------------------------------------------------------------------------
+create table if not exists public.exam_reports (
+  id                    uuid primary key default gen_random_uuid(),
+  exam_id               text not null references public.exams(id) on delete cascade,
+  reporter_id           uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  reporter_display_name text,                            -- ADR-0003 snapshot
+  reason                text not null,
+  created_at            timestamptz not null default now(),
+  unique (exam_id, reporter_id)                          -- 1 report / user / exam
+);
+alter table public.exam_reports drop constraint if exists exam_reports_reason_check;
+alter table public.exam_reports add constraint exam_reports_reason_check
+  check (length(btrim(reason)) > 0);
+
+-- ----------------------------------------------------------------------------
+-- 4. SELECT policies thay thế — published HOẶC của chính tác giả (không admin)
+-- ----------------------------------------------------------------------------
+drop policy if exists "exams_select_authenticated" on public.exams;
+drop policy if exists "exams_select_visible" on public.exams;
+create policy "exams_select_visible" on public.exams
+  for select to authenticated using (
+    status = 'published' or author_id = auth.uid()
+  );
+
+-- questions: thấy được nếu thuộc ít nhất một exam mà user được thấy.
+drop policy if exists "questions_select_authenticated" on public.questions;
+drop policy if exists "questions_select_visible" on public.questions;
+create policy "questions_select_visible" on public.questions
+  for select to authenticated using (
+    exists (
+      select 1 from public.exams e
+      where questions.id = any(e.question_ids)
+        and (e.status = 'published' or e.author_id = auth.uid())
+    )
+  );
+
+-- ----------------------------------------------------------------------------
+-- 5. WRITE policies tác giả (không admin)
+-- ----------------------------------------------------------------------------
+-- exams: tác giả tự quản lý đề của mình (mọi status). Published vẫn sửa được (PRD R8).
+drop policy if exists "exams_insert_author" on public.exams;
+create policy "exams_insert_author" on public.exams
+  for insert to authenticated with check (author_id = auth.uid());
+
+drop policy if exists "exams_update_author" on public.exams;
+create policy "exams_update_author" on public.exams
+  for update to authenticated using (author_id = auth.uid()) with check (author_id = auth.uid());
+
+drop policy if exists "exams_delete_author" on public.exams;
+create policy "exams_delete_author" on public.exams
+  for delete to authenticated using (author_id = auth.uid());
+
+-- questions: tác giả ghi câu hỏi thuộc đề của chính mình.
+drop policy if exists "questions_insert_author" on public.questions;
+create policy "questions_insert_author" on public.questions
+  for insert to authenticated with check (
+    exists (select 1 from public.exams e
+            where questions.id = any(e.question_ids) and e.author_id = auth.uid())
+  );
+drop policy if exists "questions_update_author" on public.questions;
+create policy "questions_update_author" on public.questions
+  for update to authenticated using (
+    exists (select 1 from public.exams e
+            where questions.id = any(e.question_ids) and e.author_id = auth.uid())
+  ) with check (
+    exists (select 1 from public.exams e
+            where questions.id = any(e.question_ids) and e.author_id = auth.uid())
+  );
+drop policy if exists "questions_delete_author" on public.questions;
+create policy "questions_delete_author" on public.questions
+  for delete to authenticated using (
+    exists (select 1 from public.exams e
+            where questions.id = any(e.question_ids) and e.author_id = auth.uid())
+  );
+
+-- Seeded content có author_id is null → không policy tác giả nào khớp — client
+-- chỉ đọc; owner sửa seed qua service-role/SQL (không đổi). Gỡ UGC published
+-- xấu: out-of-band bằng service-role (bypass RLS).
+
+-- ----------------------------------------------------------------------------
+-- 6. exam_reports policies — chỉ đọc report của chính mình
+-- ----------------------------------------------------------------------------
+alter table public.exam_reports enable row level security;
+
+drop policy if exists "reports_insert_own" on public.exam_reports;
+create policy "reports_insert_own" on public.exam_reports
+  for insert to authenticated with check (
+    reporter_id = auth.uid()
+    and exists (select 1 from public.exams e where e.id = exam_id and e.status = 'published')
+  );
+
+-- Select = chỉ row của mình (cho UI "bạn đã báo cáo"). Owner đọc tất cả out-of-band.
+drop policy if exists "reports_select_own" on public.exam_reports;
+create policy "reports_select_own" on public.exam_reports
+  for select to authenticated using (reporter_id = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- 7. profiles_update_own — bổ sung with check (đóng lỗ hổng write-scoping)
+-- ----------------------------------------------------------------------------
+drop policy if exists "profiles_update_own" on public.user_profiles;
+create policy "profiles_update_own" on public.user_profiles
+  for update using (id = auth.uid()) with check (id = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- 8. Storage policies — bucket exam-images & exam-uploads
+--    Bucket tạo qua Storage API/dashboard (xem supabase/setup-storage.ts).
+--    Path convention: {bucket}/{exam_id}/{filename} → policy resolve exam từ
+--    segment đầu của path. Nếu SQL Editor báo "must be owner of table objects",
+--    tạo các policy này qua Dashboard → Storage → Policies (nội dung y hệt).
+-- ----------------------------------------------------------------------------
+-- exam-images: hình của đề published đọc được (catalog/player); chưa published
+-- chỉ tác giả đọc.
+drop policy if exists "exam_images_select" on storage.objects;
+create policy "exam_images_select" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'exam-images'
+    and exists (
+      select 1 from public.exams e
+      where e.id = (storage.foldername(name))[1]
+        and (e.status = 'published' or e.author_id = auth.uid())
+    )
+  );
+
+-- exam-images write: chỉ tác giả sở hữu exam được ghi vào folder của đề mình.
+drop policy if exists "exam_images_write" on storage.objects;
+create policy "exam_images_write" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'exam-images'
+    and exists (select 1 from public.exams e
+                where e.id = (storage.foldername(name))[1] and e.author_id = auth.uid())
+  );
+
+-- exam-uploads (file gốc câu hỏi/đáp án): chỉ tác giả, cả đọc lẫn ghi. Không bao giờ public.
+drop policy if exists "exam_uploads_all" on storage.objects;
+create policy "exam_uploads_all" on storage.objects
+  for all to authenticated using (
+    bucket_id = 'exam-uploads'
+    and exists (select 1 from public.exams e
+                where e.id = (storage.foldername(name))[1] and e.author_id = auth.uid())
+  ) with check (
+    bucket_id = 'exam-uploads'
+    and exists (select 1 from public.exams e
+                where e.id = (storage.foldername(name))[1] and e.author_id = auth.uid())
+  );
+
+-- ----------------------------------------------------------------------------
+-- 8b. Vá phát hiện khi làm Task 4.1 (2026-07-16):
+--   (1) correct_answer NOT NULL + CHECK A–D làm câu ESSAY và câu mcq THIẾU đáp
+--       án (trạng thái failed/review chờ tác giả sửa) không thể lưu. Nới thành
+--       nullable; tính toàn vẹn của đề PUBLISHED do publishExam cưỡng chế
+--       (validate sạch mới cho publish — AC-013/016); catalog/player chỉ đọc
+--       published nên không bao giờ gặp correct_answer null.
+--   (2) exam-images thiếu policy UPDATE (re-crop dùng upsert) và DELETE
+--       (deleteExam dọn hình) cho tác giả.
+-- ----------------------------------------------------------------------------
+alter table public.questions alter column correct_answer drop not null;
+alter table public.questions drop constraint if exists questions_correct_answer_check;
+alter table public.questions add constraint questions_correct_answer_check
+  check (correct_answer is null or correct_answer in ('A', 'B', 'C', 'D'));
+
+drop policy if exists "exam_images_update" on storage.objects;
+create policy "exam_images_update" on storage.objects
+  for update to authenticated using (
+    bucket_id = 'exam-images'
+    and exists (select 1 from public.exams e
+                where e.id = (storage.foldername(name))[1] and e.author_id = auth.uid())
+  ) with check (
+    bucket_id = 'exam-images'
+    and exists (select 1 from public.exams e
+                where e.id = (storage.foldername(name))[1] and e.author_id = auth.uid())
+  );
+
+drop policy if exists "exam_images_delete" on storage.objects;
+create policy "exam_images_delete" on storage.objects
+  for delete to authenticated using (
+    bucket_id = 'exam-images'
+    and exists (select 1 from public.exams e
+                where e.id = (storage.foldername(name))[1] and e.author_id = auth.uid())
+  );
+
+-- ----------------------------------------------------------------------------
+-- 8c. UGC v2.1 (ADR-0005) — format đề quốc gia nhiều PHẦN (Task A1, 2026-07-17).
+--   Đề TN THPT từ 2025: PHẦN I (mcq) / PHẦN II (đúng-sai 4 ý a–d) / PHẦN III
+--   (trả lời ngắn), số câu ĐÁNH LẠI TỪ 1 theo từng phần → cần trục part.
+--   - part_number: phần chứa câu hỏi (đề cũ không chia phần = 1).
+--   - sub_answers: đáp án Đ/S từng ý cho true_false, dạng {"a":bool,...} —
+--     SERVER-ONLY như correct_answer (player KHÔNG BAO GIỜ select cột này).
+--   - short_answer TÁI DÙNG cột essay_answer (giá trị mong đợi dạng text).
+--   - exams.parts: [{"number":int,"title":text}] tiêu đề phần in trên đề để
+--     hiển thị nhóm; null với đề 1 phần.
+-- ----------------------------------------------------------------------------
+alter table public.questions add column if not exists part_number int not null default 1;
+alter table public.questions add column if not exists sub_answers jsonb;
+
+alter table public.questions drop constraint if exists questions_type_check;
+alter table public.questions add constraint questions_type_check
+  check (question_type in ('mcq', 'essay', 'true_false', 'short_answer'));
+
+alter table public.exams add column if not exists parts jsonb;
+
+-- attempt_answers.answer trước đây CHECK in ('A'..'D') — v2.1 người làm bài
+-- còn nhập Đ/S từng ý (true_false, mã hoá "a:Đ,b:S,...") và giá trị ngắn
+-- (short_answer). Nới thành text tự do có giới hạn độ dài; tính đúng/sai của
+-- mcq do computeScore server-side quyết định, CHECK cũ không phải tầng bảo vệ.
+alter table public.attempt_answers drop constraint if exists attempt_answers_answer_check;
+alter table public.attempt_answers add constraint attempt_answers_answer_check
+  check (answer is null or length(answer) <= 500);
+
+-- ----------------------------------------------------------------------------
+-- 9. BACKFILL — CUỐI CÙNG: seed cũ (không tác giả) → published
+-- ----------------------------------------------------------------------------
+update public.exams
+   set status = 'published'
+ where author_id is null
+   and status is distinct from 'published';
+-- questions defaults (question_type='mcq', image_url=null, essay_answer=null)
+-- không cần backfill.
+-- v2.1: part_number default 1 / sub_answers null / exams.parts null — row cũ
+-- (seed + UGC v2.0) tự đúng, không cần backfill (AC-033).

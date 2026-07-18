@@ -1,0 +1,38 @@
+// UGC Exam Upload v2.0 — giới hạn input (Design Doc §Input limits, TBD-04).
+// Dùng ở cả validation server (actions) lẫn assembler thuần.
+
+export const LIMITS = {
+  MAX_QUESTIONS: 50,
+  MIN_QUESTIONS: 1,
+  // v2.1 (ADR-0005) — format đề quốc gia nhiều phần.
+  MAX_PARTS: 5,
+  MIN_SUB_ITEMS: 2,
+  MAX_SUB_ITEMS: 4,
+  MAX_SHORT_ANSWER: 100,
+  MAX_TITLE: 200,
+  MAX_STEM: 2000,
+  MAX_CHOICE: 500,
+  MAX_ESSAY_ANSWER: 4000,
+  MAX_REPORT_REASON: 1000,
+  MAX_SCHOOL: 200,
+  MIN_DURATION: 1,
+  MAX_DURATION: 600,
+  // Giả định nghiệp vụ D10 — phạm vi THCS/THPT; product confirm ở Open Item O-1.
+  MIN_GRADE: 6,
+  MAX_GRADE: 12,
+  MIN_YEAR: 1900,
+  MAX_YEAR: 2100,
+  // Mỗi file; đồng thời là guard kích thước request Claude.
+  MAX_FILE_BYTES: 15 * 1024 * 1024,
+  MAX_PDF_PAGES: 30,
+  ALLOWED_MIME: [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "application/pdf",
+  ] as const,
+  // Guard chi phí nhẹ theo user (app-layer, không phải DB).
+  MAX_UPLOADS_PER_DAY: 30,
+} as const;
+
+export type AllowedMime = (typeof LIMITS.ALLOWED_MIME)[number];

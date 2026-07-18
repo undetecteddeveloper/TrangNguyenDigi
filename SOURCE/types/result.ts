@@ -5,10 +5,15 @@ import type { ChoiceId } from "./question";
 
 export interface PerQuestionResult {
   questionId: string;
-  /** Đáp án user chọn; undefined = bỏ trống. */
-  selected?: ChoiceId;
-  correct: ChoiceId;
+  /** Input của user; undefined = bỏ trống. mcq: "A".."D"; true_false: chuỗi
+   * "a:Đ,b:S,..." (tfCodec); short_answer/essay: text tự do (UGC v2.1). */
+  selected?: string;
+  /** Đáp án đúng — CHỈ câu mcq (câu không chấm để undefined). */
+  correct?: ChoiceId;
   isCorrect: boolean;
+  /** false = câu KHÔNG tính điểm (true_false/short_answer/essay — v2.1,
+   * "stored, not auto-scored"). undefined (row cũ trước v2.1) = true. */
+  scored?: boolean;
 }
 
 export interface TopicResult {

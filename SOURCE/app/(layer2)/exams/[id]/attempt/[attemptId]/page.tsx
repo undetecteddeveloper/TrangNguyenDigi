@@ -24,6 +24,7 @@ export default async function ExamPlayerPage({
       examTitle={data.exam.title}
       durationMinutes={data.exam.durationMinutes}
       questions={data.questions}
+      parts={data.exam.parts}
     />
   );
 }

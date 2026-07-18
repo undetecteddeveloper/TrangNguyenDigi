@@ -24,7 +24,8 @@ const NAV: NavItem[] = [
   { label: "Home", href: "/" },
   { label: "Analytics", href: "/me/dashboard" },
   { label: "History", href: "#" },
-  { label: "Import", href: "/admin/import" },
+  // UGC v2.0 (Task 6.1): Import→Upload cho MỌI user; KHÔNG có mục admin.
+  { label: "Upload", href: "/upload" },
 ];
 
 const GUEST_NAV: NavItem[] = [...NAV, { label: "Account", href: "/?auth=signin" }];
@@ -56,23 +57,19 @@ export function SiteHeader({ user = null }: { user?: MenuUser | null }) {
         {/* Dãy tag ngang — style chép từ HomeSidebar (bỏ hairline chia dòng vì
             các tag nằm ngang, đường kẻ dọc giữa tag sẽ thành nhiễu). Mobile:
             logo ẩn → nav giãn hết bề ngang (justify-between), chữ/tracking nén. */}
-        <nav className="flex items-center gap-3 sm:gap-8 lg:gap-10 max-sm:w-full max-sm:justify-between">
+        <nav className="flex items-center gap-3 max-sm:w-full max-sm:justify-between sm:gap-8 lg:gap-10">
           {items.map((item) => {
             const isActive =
               item.href !== "#" &&
-              (item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href));
+              (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
             return (
               <Link
                 key={item.label}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 className={[
-                  "whitespace-nowrap font-sans text-xs font-medium uppercase tracking-[0.2em] transition-colors active:text-[#A62C2B] max-sm:text-[10px] max-sm:tracking-[0.08em]",
-                  isActive
-                    ? "text-[#A62C2B]"
-                    : "text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
+                  "font-sans text-xs font-medium tracking-[0.2em] whitespace-nowrap uppercase transition-colors active:text-[#A62C2B] max-sm:text-[10px] max-sm:tracking-[0.08em]",
+                  isActive ? "text-[#A62C2B]" : "text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
                 ].join(" ")}
               >
                 {item.label}

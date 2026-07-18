@@ -2,15 +2,143 @@
 
 // RichText — render nội dung markdown + LaTeX (GĐ 3 M3.1 Task 5).
 // Dùng cho nội dung câu hỏi và lựa chọn đáp án (Layer 2), tái dùng được cho layer khác.
-// Pipeline: remark-gfm (markdown mở rộng) + remark-math (cú pháp $…$, $$…$$)
-//           → rehype-katex (render công thức bằng KaTeX).
+//
+// HARDENED cho nội dung KHÔNG TIN CẬY (UGC v2.0, ADR-0002 / Task 3.1 — Gate B):
+// Pipeline: remark-gfm + remark-math → rehype-katex (KATEX_SAFE_OPTIONS)
+//           → rehype-sanitize (SANITIZE_SCHEMA) — sanitize chạy CUỐI để backstop
+//           cả output của KaTeX (advisory GHSA-64fm-8hw2-v72w, GHSA-cvr6-37gx-v8wc,
+//           CVE-2025-23207).
+// BẤT BIẾN (được XSS fixtures canh giữ — xem __tests__/RichText.xss.test.tsx):
+//   - KHÔNG BAO GIỜ thêm rehype-raw (raw HTML không được parse).
+//   - KHÔNG BAO GIỜ override urlTransform của react-markdown (giữ default an toàn).
+//   - KHÔNG BAO GIỜ đặt KaTeX trust: true.
 // `inline` = true: bỏ thẻ <p> bao quanh (dùng trong nhãn lựa chọn, không xuống dòng block).
 
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import "katex/dist/katex.min.css";
+
+// KaTeX an toàn cho input không tin cậy (Design Doc §KaTeX safe config):
+// trust:false chặn \href/\includegraphics/\htmlData; maxExpand chặn DoS \edef/
+// macro lồng nhau; maxSize chặn \rule khổng lồ; throwOnError:false để câu lỗi
+// LaTeX hiển thị dạng văn bản lỗi thay vì làm vỡ trang.
+const KATEX_SAFE_OPTIONS = {
+  trust: false,
+  throwOnError: false,
+  maxExpand: 100,
+  maxSize: 50,
+  strict: false,
+};
+
+// Nhóm thuộc tính trình bày cho phép trên các tag do KaTeX phát ra.
+// style là bắt buộc (KaTeX định vị bằng inline style); an toàn vì các tag này
+// KHÔNG thể tự tạo từ markdown (không rehype-raw) — chỉ KaTeX sinh ra chúng,
+// và sanitize vẫn lọc mọi on*/protocol nguy hiểm.
+const KATEX_PRESENTATION = ["className", "style"];
+
+// Tag MathML + SVG mà KaTeX HTML/MathML output cần (Design Doc §allowlist schema).
+const KATEX_TAGS = [
+  "math",
+  "semantics",
+  "annotation",
+  "mrow",
+  "mi",
+  "mo",
+  "mn",
+  "ms",
+  "mtext",
+  "mspace",
+  "mfrac",
+  "msup",
+  "msub",
+  "msubsup",
+  "msqrt",
+  "mroot",
+  "mstyle",
+  "mtable",
+  "mtr",
+  "mtd",
+  "mlabeledtr",
+  "mover",
+  "munder",
+  "munderover",
+  "menclose",
+  "mpadded",
+  "mphantom",
+  "svg",
+  "path",
+  "line",
+  "g",
+];
+
+// Mở rộng defaultSchema (GitHub-style: giữ subset GFM seed đang dùng, chặn
+// script/iframe/style/on*/protocol lạ by construction) để cho KaTeX đi qua.
+const SANITIZE_SCHEMA: typeof defaultSchema = {
+  ...defaultSchema,
+  tagNames: [...new Set([...(defaultSchema.tagNames ?? []), ...KATEX_TAGS])],
+  attributes: {
+    ...defaultSchema.attributes,
+    // KaTeX HTML output: span.class + style định vị + aria-hidden trên nhánh HTML.
+    span: [...KATEX_PRESENTATION, "ariaHidden"],
+    // Nhánh MathML.
+    math: [...KATEX_PRESENTATION, "xmlns", "display"],
+    annotation: [...KATEX_PRESENTATION, "encoding"],
+    semantics: KATEX_PRESENTATION,
+    mrow: KATEX_PRESENTATION,
+    mi: [...KATEX_PRESENTATION, "mathvariant"],
+    mo: [
+      ...KATEX_PRESENTATION,
+      "stretchy",
+      "fence",
+      "separator",
+      "lspace",
+      "rspace",
+      "minsize",
+      "maxsize",
+      "movablelimits",
+      "symmetric",
+      "accent",
+    ],
+    mn: KATEX_PRESENTATION,
+    ms: KATEX_PRESENTATION,
+    mtext: KATEX_PRESENTATION,
+    mspace: [...KATEX_PRESENTATION, "width", "height", "depth"],
+    mfrac: [...KATEX_PRESENTATION, "linethickness"],
+    msup: KATEX_PRESENTATION,
+    msub: KATEX_PRESENTATION,
+    msubsup: KATEX_PRESENTATION,
+    msqrt: KATEX_PRESENTATION,
+    mroot: KATEX_PRESENTATION,
+    mstyle: [...KATEX_PRESENTATION, "scriptlevel", "displaystyle", "mathcolor", "mathbackground"],
+    mtable: [
+      ...KATEX_PRESENTATION,
+      "rowspacing",
+      "columnspacing",
+      "columnalign",
+      "rowalign",
+      "columnlines",
+      "rowlines",
+      "width",
+    ],
+    mtr: KATEX_PRESENTATION,
+    mtd: [...KATEX_PRESENTATION, "columnalign"],
+    mlabeledtr: KATEX_PRESENTATION,
+    mover: [...KATEX_PRESENTATION, "accent"],
+    munder: [...KATEX_PRESENTATION, "accentunder"],
+    munderover: [...KATEX_PRESENTATION, "accent", "accentunder"],
+    menclose: [...KATEX_PRESENTATION, "notation"],
+    mpadded: [...KATEX_PRESENTATION, "width", "height", "depth", "lspace", "voffset"],
+    mphantom: KATEX_PRESENTATION,
+    // SVG cho delimiter/sqrt co giãn của KaTeX.
+    svg: [...KATEX_PRESENTATION, "xmlns", "width", "height", "viewBox", "preserveAspectRatio"],
+    path: [...KATEX_PRESENTATION, "d"],
+    line: [...KATEX_PRESENTATION, "x1", "y1", "x2", "y2", "stroke", "strokeWidth"],
+    g: KATEX_PRESENTATION,
+  },
+};
 
 const INLINE_COMPONENTS: Components = {
   // Gỡ <p> để text chảy inline trong nhãn lựa chọn (vẫn giữ math/format con).
@@ -30,7 +158,10 @@ export function RichText({ text, className, inline = false }: RichTextProps) {
   const markdown = (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      rehypePlugins={[
+        [rehypeKatex, KATEX_SAFE_OPTIONS],
+        [rehypeSanitize, SANITIZE_SCHEMA],
+      ]}
       components={inline ? INLINE_COMPONENTS : undefined}
     >
       {text}

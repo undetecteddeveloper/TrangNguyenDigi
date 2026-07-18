@@ -78,7 +78,9 @@
       "Bash(echo \"ESLINT_EXIT:$?\")",
       "Bash(rm -rf .playwright-mcp/)",
       "Bash(rm -f dap_an.png prompt.txt)",
-      "Bash(grep -iE \"C:\\\\\\\\\\\\\\\\|/Users/|key|token|secret|password\" .claude/settings.json)"
+      "Bash(grep -iE \"C:\\\\\\\\\\\\\\\\|/Users/|key|token|secret|password\" .claude/settings.json)",
+      "Bash(git commit -q -m 'chore\\(repo\\): remove legacy templates/docs, add tooling config, tidy gitignore *)",
+      "Bash(awk '{print $1}')"
     ]
   },
   "enabledMcpjsonServers": [

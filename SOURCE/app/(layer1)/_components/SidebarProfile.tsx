@@ -10,6 +10,7 @@
 // Panel dropup nền ngà trên sidebar đen sơn mài (phân lớp bằng màu nền +
 // hairline — DESIGN.md, không shadow). Nhãn tiếng Anh đồng bộ homepage.
 import Image from "next/image";
+import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, updateProfile, type AuthState } from "@/app/(layer1)/actions";
@@ -22,10 +23,7 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
   const [displayName, setDisplayName] = useState(initial);
   const [draft, setDraft] = useState(initial);
   const router = useRouter();
-  const [state, formAction, pending] = useActionState<AuthState, FormData>(
-    updateProfile,
-    null,
-  );
+  const [state, formAction, pending] = useActionState<AuthState, FormData>(updateProfile, null);
   const wasPending = useRef(false);
 
   // Server Action xong (pending true → false) không lỗi → chốt tên mới, đóng
@@ -64,13 +62,7 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-3 rounded-md border border-[#EDE1C8]/12 px-3 py-2.5 transition-colors hover:border-[#EDE1C8]/30"
       >
-        <Image
-          src={AVATAR}
-          alt=""
-          width={32}
-          height={32}
-          className="shrink-0 rounded-full"
-        />
+        <Image src={AVATAR} alt="" width={32} height={32} className="shrink-0 rounded-full" />
         <span className="min-w-0 flex-1 truncate text-left font-sans text-sm text-[#EDE1C8]">
           {displayName}
         </span>
@@ -95,6 +87,15 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
               >
                 Edit
               </button>
+              {/* My exams (UGC v2.0, Task 6.1) — giữa Edit và Sign out (D7). */}
+              <Link
+                role="menuitem"
+                href="/me/exams"
+                onClick={close}
+                className="block w-full rounded-[4px] px-3 py-2 text-center font-sans text-sm text-[#1B1512] transition-colors hover:bg-[#E3D5B6]"
+              >
+                My exams
+              </Link>
               <form action={signOut}>
                 <button
                   type="submit"
@@ -105,10 +106,7 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
               </form>
             </>
           ) : (
-            <form
-              action={formAction}
-              className="flex flex-col items-center gap-2 p-2"
-            >
+            <form action={formAction} className="flex flex-col items-center gap-2 p-2">
               <label htmlFor="sidebar-profile-display-name" className="sr-only">
                 Display name
               </label>
@@ -118,9 +116,7 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
                 value={draft}
                 onChange={(e) => {
                   // Ràng buộc: ≤12 ký tự, chỉ chữ cái (kể cả có dấu) + dấu chấm.
-                  const filtered = e.target.value
-                    .replace(/[^\p{L}.]/gu, "")
-                    .slice(0, 12);
+                  const filtered = e.target.value.replace(/[^\p{L}.]/gu, "").slice(0, 12);
                   setDraft(filtered);
                 }}
                 maxLength={12}
@@ -131,9 +127,7 @@ export function SidebarProfile({ displayName: initial }: { displayName: string }
                 Max 12 characters, letters and dots only.
               </p>
               {state?.error && (
-                <p className="px-1 text-center font-sans text-xs text-[#A62C2B]">
-                  {state.error}
-                </p>
+                <p className="px-1 text-center font-sans text-xs text-[#A62C2B]">{state.error}</p>
               )}
               <div className="flex w-full gap-2">
                 <button

@@ -4,17 +4,18 @@
 // không persist DB). Có thể nâng lên Zustand store nếu cần (xem UI-LAYER-MAP Mục 9).
 
 import { useReducer } from "react";
-import type { ChoiceId } from "@/types/question";
 
 interface ExamPlayerState {
   current: number;
-  answers: Record<string, ChoiceId>;
+  /** questionId → input. mcq: "A".."D"; true_false: "a:Đ,b:S,..." (tfCodec);
+   * short_answer: text tự do (UGC v2.1 — player thu input, không chấm). */
+  answers: Record<string, string>;
   /** questionId → true nếu được đánh dấu để xem lại. */
   flags: Record<string, true>;
 }
 
 type ExamPlayerAction =
-  | { type: "SELECT_ANSWER"; questionId: string; choice: ChoiceId }
+  | { type: "SELECT_ANSWER"; questionId: string; choice: string }
   | { type: "TOGGLE_FLAG"; questionId: string }
   | { type: "GOTO"; index: number }
   | { type: "NEXT" }
@@ -67,7 +68,7 @@ export function useExamPlayer(total: number) {
     current: state.current,
     answers: state.answers,
     flags: state.flags,
-    selectAnswer: (questionId: string, choice: ChoiceId) =>
+    selectAnswer: (questionId: string, choice: string) =>
       dispatch({ type: "SELECT_ANSWER", questionId, choice }),
     toggleFlag: (questionId: string) =>
       dispatch({ type: "TOGGLE_FLAG", questionId }),

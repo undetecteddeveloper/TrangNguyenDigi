@@ -30,7 +30,8 @@ export async function startAttempt(examId: string) {
  */
 export async function submitExam(
   attemptId: string,
-  answers: Record<string, ChoiceId>,
+  // v2.1: string — mcq "A".."D"; true_false "a:Đ,b:S,..."; short_answer text.
+  answers: Record<string, string>,
 ) {
   const supabase = await createClient();
 
@@ -58,13 +59,15 @@ export async function submitExam(
   if (examErr) throw examErr;
   const questionIds = examRow.question_ids as string[];
 
+  // v2.1: thêm question_type để computeScore biết câu nào KHÔNG chấm
+  // (true_false/short_answer/essay — stored, not auto-scored).
   const { data: qRows, error: qErr } = await supabase
     .from("questions")
-    .select("id, content, choices, correct_answer, subject, grade, topic")
+    .select("id, content, choices, correct_answer, subject, grade, topic, question_type")
     .in("id", questionIds);
   if (qErr) throw qErr;
 
-  const byId = new Map(
+  const byId = new Map<string, Question>(
     (qRows as Array<Record<string, unknown>>).map((r) => [
       r.id as string,
       {
@@ -75,6 +78,7 @@ export async function submitExam(
         subject: r.subject as string,
         grade: r.grade as number,
         topic: r.topic as string,
+        questionType: (r.question_type as Question["questionType"]) ?? "mcq",
       } satisfies Question,
     ]),
   );
@@ -82,11 +86,11 @@ export async function submitExam(
     .map((id) => byId.get(id))
     .filter((q): q is Question => q !== undefined);
 
-  // 3. Batch-insert answers (null nếu bỏ trống).
+  // 3. Batch-insert answers (null nếu bỏ trống; cắt 500 ký tự khớp CHECK v2.1).
   const answerRows = questions.map((q) => ({
     attempt_id: attemptId,
     question_id: q.id,
-    answer: answers[q.id] ?? null,
+    answer: answers[q.id]?.slice(0, 500) ?? null,
   }));
   const { error: ansErr } = await supabase
     .from("attempt_answers")

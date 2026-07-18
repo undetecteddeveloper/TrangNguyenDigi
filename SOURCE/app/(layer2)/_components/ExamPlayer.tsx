@@ -24,6 +24,8 @@ interface ExamPlayerProps {
   examTitle: string;
   durationMinutes: number;
   questions: PublicQuestion[];
+  /** Tiêu đề các PHẦN (đề chuẩn 2025, v2.1) — hiện nhãn phần của câu hiện tại. */
+  parts?: { number: number; title: string }[];
 }
 
 export function ExamPlayer({
@@ -31,6 +33,7 @@ export function ExamPlayer({
   examTitle,
   durationMinutes,
   questions,
+  parts,
 }: ExamPlayerProps) {
   const { current, answers, flags, selectAnswer, toggleFlag, goto, next, prev } =
     useExamPlayer(questions.length);
@@ -70,6 +73,14 @@ export function ExamPlayer({
   }, [next, prev]);
 
   const question = questions[current];
+
+  // v2.1: nhãn PHẦN của câu hiện tại (đề nhiều phần) — trên card câu hỏi.
+  const multiPart =
+    (parts?.length ?? 0) > 0 || questions.some((q) => (q.partNumber ?? 1) !== 1);
+  const currentPartTitle = multiPart
+    ? (parts?.find((p) => p.number === (question.partNumber ?? 1))?.title ??
+      `Phần ${question.partNumber ?? 1}`)
+    : null;
 
   const answeredIndices = questions
     .map((q, i) => (answers[q.id] ? i : -1))
@@ -138,14 +149,23 @@ export function ExamPlayer({
             onTouchStart={swipe.onTouchStart}
             onTouchEnd={swipe.onTouchEnd}
           >
+            {currentPartTitle && (
+              <p className="eyebrow mb-3" aria-live="polite">
+                {currentPartTitle}
+              </p>
+            )}
             <QuestionRenderer
               index={current + 1}
               question={question}
               selectedAnswer={answers[question.id]}
-              onSelectAnswer={(choice) => {
-                selectAnswer(question.id, choice);
-                if (advanceRef.current) clearTimeout(advanceRef.current);
-                advanceRef.current = setTimeout(next, 250);
+              onSelectAnswer={(value) => {
+                selectAnswer(question.id, value);
+                // Tự chuyển câu CHỈ với mcq (chọn 1 lần là xong); true_false/
+                // short_answer nhập nhiều lần — tự nhảy sẽ phá dở input (v2.1).
+                if ((question.questionType ?? "mcq") === "mcq") {
+                  if (advanceRef.current) clearTimeout(advanceRef.current);
+                  advanceRef.current = setTimeout(next, 250);
+                }
               }}
               flagged={Boolean(flags[question.id])}
               onToggleFlag={() => toggleFlag(question.id)}

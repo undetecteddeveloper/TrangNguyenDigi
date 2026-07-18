@@ -7,13 +7,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getExam } from "@/app/(layer2)/queries";
+import { hasReported } from "@/app/(layer4)/queries";
 import { StartAttemptButton } from "@/app/(layer2)/_components/StartAttemptButton";
+import { ReportExam } from "@/app/(layer2)/_components/ReportExam";
+import { AuthorByline } from "@/components/shared/AuthorByline";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 
-export default async function ExamDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ExamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const exam = await getExam(id);
 
@@ -21,13 +21,17 @@ export default async function ExamDetailPage({
     notFound();
   }
 
+  // Report channel chỉ cho user đã đăng nhập (AC-025). Đề UGC mới có byline.
+  const user = await getCurrentUser();
+  const alreadyReported = user ? await hasReported(id) : false;
+
   return (
     <div className="bg-background">
       <main className="mx-auto flex w-full max-w-xl flex-col px-6 py-10">
         {/* "Trang trước" canh TRÁI block tổng quan (self-start), nội dung dưới căn giữa. */}
         <Link
           href="/exams"
-          className="preload-fade eyebrow inline-flex items-center gap-1 self-start transition-colors hover:text-brand"
+          className="preload-fade eyebrow hover:text-brand inline-flex items-center gap-1 self-start transition-colors"
           style={{ "--preload-order": 1 } as React.CSSProperties}
         >
           ← Back
@@ -40,25 +44,27 @@ export default async function ExamDetailPage({
         >
           <h1 className="text-3xl leading-tight sm:text-4xl">{exam.title}</h1>
 
+          {/* Byline UGC (Task 5.2) — dưới tiêu đề, chỉ hiện với đề có tác giả. */}
+          <AuthorByline name={exam.authorDisplayName} className="mt-2" />
+
           {/* S#28: điền data DB thật vào page — thêm School/Year/Semester
               (null → "None"). 6 ô = lưới 2×3 đều → bỏ hack căn giữa col-span
               của ô Difficulty (S#26, chỉ cần khi lẻ ô). Difficulty giữ "—"
               (tính năng chưa xây — tính từ rating user, tương lai). */}
           <dl className="mt-8 grid w-full max-w-md grid-cols-2 gap-4">
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="border-border bg-card rounded-lg border p-5">
               <dt className="eyebrow">Questions</dt>
-              <dd className="mt-2 font-serif text-2xl tabular-nums text-foreground">
+              <dd className="text-foreground mt-2 font-serif text-2xl tabular-nums">
                 {exam.questionIds.length}
               </dd>
             </div>
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="border-border bg-card rounded-lg border p-5">
               <dt className="eyebrow">Duration</dt>
-              <dd className="mt-2 font-serif text-2xl tabular-nums text-foreground">
-                {exam.durationMinutes}{" "}
-                <span className="text-base text-muted-foreground">min</span>
+              <dd className="text-foreground mt-2 font-serif text-2xl tabular-nums">
+                {exam.durationMinutes} <span className="text-muted-foreground text-base">min</span>
               </dd>
             </div>
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="border-border bg-card rounded-lg border p-5">
               <dt className="eyebrow">School</dt>
               <dd
                 className={`mt-2 font-serif text-lg leading-snug ${
@@ -68,19 +74,17 @@ export default async function ExamDetailPage({
                 {exam.school ?? "None"}
               </dd>
             </div>
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="border-border bg-card rounded-lg border p-5">
               <dt className="eyebrow">Year</dt>
               <dd
                 className={`mt-2 font-serif text-2xl tabular-nums ${
-                  exam.schoolYear !== undefined
-                    ? "text-foreground"
-                    : "text-muted-foreground"
+                  exam.schoolYear !== undefined ? "text-foreground" : "text-muted-foreground"
                 }`}
               >
                 {exam.schoolYear ?? "None"}
               </dd>
             </div>
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="border-border bg-card rounded-lg border p-5">
               <dt className="eyebrow">Semester</dt>
               <dd
                 className={`mt-2 font-serif text-2xl ${
@@ -90,17 +94,22 @@ export default async function ExamDetailPage({
                 {exam.semester ?? "None"}
               </dd>
             </div>
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="border-border bg-card rounded-lg border p-5">
               <dt className="eyebrow">Difficulty</dt>
-              <dd className="mt-2 font-serif text-2xl text-muted-foreground">
-                —
-              </dd>
+              <dd className="text-muted-foreground mt-2 font-serif text-2xl">—</dd>
             </div>
           </dl>
 
           <div className="mt-8">
             <StartAttemptButton examId={exam.id} />
           </div>
+
+          {/* Report channel (Task 5.2) — chỉ user đã đăng nhập. */}
+          {user && (
+            <div className="mt-6">
+              <ReportExam examId={exam.id} initiallyReported={alreadyReported} />
+            </div>
+          )}
         </div>
       </main>
     </div>

@@ -7,6 +7,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(process.cwd(), ".."),
   },
+  // mupdf (WASM) + sharp (native) KHÔNG được để Turbopack bundle vào server
+  // build — phải require ở runtime, nếu không file .wasm/.node không nạp được
+  // (mupdf.Document.openDocument throw → "the PDF could not be read").
+  serverExternalPackages: ["mupdf", "sharp"],
+  // UGC upload (extractAndAssemble) gửi 2 file tới LIMITS.MAX_FILE_BYTES=15MB
+  // mỗi file qua Server Action — mặc định Next.js chỉ cho 1MB/request.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "35mb",
+    },
+  },
 };
 
 export default nextConfig;

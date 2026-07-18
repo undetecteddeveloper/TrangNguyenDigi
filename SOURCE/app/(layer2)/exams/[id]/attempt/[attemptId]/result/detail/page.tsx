@@ -3,10 +3,13 @@
 // Server Component: đọc getResult(); chưa nộp / không thuộc user → redirect trang đề.
 // Hiển thị mỗi câu: nội dung (markdown+LaTeX) + 4 lựa chọn, tô đáp án đúng (brand) và
 // đáp án user chọn sai (destructive). Visual nhất quán L2 "tờ giấy trắng / focused".
+// v2.1 (Task D3): câu KHÔNG chấm (true_false/short_answer/essay) hiển thị input
+// của user + đáp án lưu trữ, nhãn "Not auto-scored" — không tô đúng/sai.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getResult } from "@/app/(layer2)/queries";
+import { decodeTfAnswer, formatSubAnswers } from "@/lib/ugc/tfCodec";
 import { RichText } from "@/components/shared/RichText";
 
 export default async function ResultDetailPage({
@@ -50,6 +53,68 @@ export default async function ResultDetailPage({
         >
           {result.perQuestion.map((r, i) => {
             const q = questions[r.questionId];
+            const notScored = r.scored === false;
+            // v2.1: câu không chấm — hiển thị input + đáp án lưu trữ, không tô Đ/S.
+            if (notScored) {
+              const studentInput =
+                q?.questionType === "true_false"
+                  ? formatSubAnswers(decodeTfAnswer(r.selected))
+                  : (r.selected ?? "");
+              const storedAnswer =
+                q?.questionType === "true_false"
+                  ? formatSubAnswers(q.subAnswers)
+                  : (q?.essayAnswer ?? "");
+              return (
+                <li
+                  key={r.questionId}
+                  className="flex flex-col gap-4 border-t border-border pt-6"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="eyebrow">Question {i + 1}</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Not auto-scored
+                    </span>
+                  </div>
+                  {q && (
+                    <RichText
+                      text={q.content}
+                      className="font-serif text-lg leading-relaxed text-foreground"
+                    />
+                  )}
+                  {q?.questionType === "true_false" && (
+                    <ul className="flex flex-col gap-2">
+                      {q.subItems?.map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
+                        >
+                          <span className="w-4 shrink-0 pt-0.5 font-mono text-sm text-muted-foreground">
+                            {s.id})
+                          </span>
+                          <RichText
+                            text={s.text}
+                            inline
+                            className="pt-0.5 text-base leading-relaxed text-card-foreground"
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex flex-col gap-1 text-sm">
+                    <p className="text-muted-foreground">
+                      Your answer:{" "}
+                      <span className="text-foreground">
+                        {studentInput || "— skipped —"}
+                      </span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Stored answer:{" "}
+                      <span className="text-[#4F7942]">{storedAnswer || "—"}</span>
+                    </p>
+                  </div>
+                </li>
+              );
+            }
             // S#26: correct = XANH LÁ ẤM #4F7942 (fern — hợp tông ngà/sơn mài,
             // không dùng green neon lạnh); wrong giữ destructive. Green=correct
             // là convention chuẩn, áp cho mọi marking correct bên dưới.

@@ -18,4 +18,14 @@ export interface Exam {
   schoolYear?: number;
   /** Học kỳ ra đề: 'HK1' | 'HK2' — S#27, nullable trong DB. */
   semester?: string;
+  /**
+   * Tên hiển thị tác giả (UGC v2.0, ADR-0003 — denormalized snapshot).
+   * undefined với đề seed (author_id null) → KHÔNG render byline (không chỗ trống).
+   */
+  authorDisplayName?: string;
+  /**
+   * Tiêu đề các PHẦN của đề chuẩn 2025 (UGC v2.1, ADR-0005) — dùng cho heading
+   * nhóm câu hỏi ở player/review. undefined/null = đề 1 phần (không heading).
+   */
+  parts?: { number: number; title: string }[];
 }

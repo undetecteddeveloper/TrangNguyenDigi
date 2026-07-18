@@ -19,13 +19,11 @@ const NAV: NavItem[] = [
   { label: "Home", href: "/" },
   { label: "Analytics", href: "/me/dashboard" },
   { label: "History", href: "#" },
-  { label: "Import", href: "/admin/import" },
+  // UGC v2.0 (Task 6.1): Import→Upload cho MỌI user; KHÔNG có mục admin.
+  { label: "Upload", href: "/upload" },
 ];
 
-const GUEST_NAV: NavItem[] = [
-  ...NAV,
-  { label: "Account", href: "/?auth=signin" },
-];
+const GUEST_NAV: NavItem[] = [...NAV, { label: "Account", href: "/?auth=signin" }];
 
 export function HomeSidebar({
   user,
@@ -59,7 +57,7 @@ export function HomeSidebar({
                 // S#26: BORDER cũng chuyển đỏ son khi tag được click — cả
                 // pseudo `active:` (ngay lúc nhấn, kể cả tag dẫn route khác)
                 // lẫn tag hiện hành (isActive).
-                "block border-b-2 py-2.5 text-right font-sans text-xs font-medium uppercase tracking-[0.2em] transition-colors active:border-[#A62C2B] active:text-[#A62C2B] lg:py-3.5",
+                "block border-b-2 py-2.5 text-right font-sans text-xs font-medium tracking-[0.2em] uppercase transition-colors active:border-[#A62C2B] active:text-[#A62C2B] lg:py-3.5",
                 isActive
                   ? "border-[#A62C2B] text-[#A62C2B]"
                   : "border-[#EDE1C8]/12 text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
