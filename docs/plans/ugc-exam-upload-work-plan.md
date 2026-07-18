@@ -152,13 +152,13 @@ flowchart TB
 The RLS+Storage suite (`test-rls.ts`, R-a…R-o) is the primary cross-service proof for the Next.js ↔ Supabase (+ Storage) boundary (non-published confinement, author-only writes, report rules, backfill). A browser-driven full-stack E2E of the author journey (upload → extract → review → publish → attempt → report) is optional ROI, flagged for an explicit decision rather than silent omission. The AI extraction path is exercised in the pilot integration check (real files, PRD metric 3), separate from the mocked-SDK unit tests.
 
 ## Completion Criteria
-- [ ] All phases completed
-- [ ] Gate A (RLS+Storage R-a…R-o) green; Gate B (XSS + regression + image-origin) green
-- [ ] Assembly fixtures green (answer fidelity, image mapping, error codes); AI key not client-bundled
-- [ ] AC-001…029 satisfied; AC-027 before/after catalog count equal
-- [ ] `tsc`/ESLint/Prettier clean; build succeeds
+- [x] All phases completed — 2026-07-16/17 (17/17 tasks code-complete)
+- [x] Gate A (RLS+Storage R-a…R-o) green (re-run PASS 2026-07-18 with v2.1 schema); Gate B (XSS + regression + image-origin) green (31 text + 8 image tests standing)
+- [x] Assembly fixtures green (answer fidelity, image mapping, error codes); AI key not client-bundled (`check:bundle` PASS 2026-07-18)
+- [ ] AC-001…029 satisfied; AC-027 before/after catalog count equal — *AC-027 count not yet measured*
+- [x] `tsc`/ESLint/Prettier clean; build succeeds — 2026-07-18 (102 unit tests)
 - [ ] axe 0 serious/critical + manual keyboard pass on all new/extended surfaces
-- [ ] End-to-end upload→review→publish→attempt→report verified
+- [ ] End-to-end upload→review→publish→attempt→report verified — *upload→extract→review + delete verified in-browser 2026-07-18 (multi-part fixture PDF, figure cropped, answers joined); publish→attempt→report outstanding*
 - [ ] Open Items O-1/O-2 resolved with product (O-3…O-6 as engineering decisions)
 - [ ] User review approval obtained
 
@@ -212,11 +212,11 @@ flowchart TB
 - **Task E1 — [Real-file e2e + regression sweep](tasks/task-v21-e1-qa.md)** — official 2025 Toán (1 exam code + answer page) end-to-end; old-format regression (AC-033); Gates A/B/C/D all green; AC-030…033.
 
 ## v2.1 Completion Criteria
-- [ ] Gates A, B (standing), C, D green
-- [ ] AC-030…033 satisfied
-- [ ] Real 2025 exam: 22 questions land under correct (part, number); PHẦN II grids read; >0 figures detected & cropped
-- [ ] Old-format exams byte-identical behavior (fixtures + manual)
-- [ ] `tsc`/ESLint/vitest/build clean; no-bundle check PASS
+- [x] Gates A, B (standing), C, D green — A: schema §8c applied + suite PASS 2026-07-18; C: composite-join fixtures green; **D: 2026-07-18 — 1/1 figure detected & cropped on a real multi-part fixture PDF via native box2d (was 0/21 pre-ADR-0006)**
+- [ ] AC-030…033 satisfied — *demonstrated end-to-end on 5-question 3-part fixture (mcq+TF grid+short answer all extracted, joined, rendered); full-size official file pending*
+- [ ] Real 2025 exam: 22 questions land under correct (part, number); PHẦN II grids read; >0 figures detected & cropped — *figure detection proven on fixture; official 2025 file run pending*
+- [ ] Old-format exams byte-identical behavior (fixtures + manual) — *unit fixtures green; manual old-format e2e pending*
+- [x] `tsc`/ESLint/vitest/build clean; no-bundle check PASS — 2026-07-18 (102 tests)
 
 ## Update History
 
