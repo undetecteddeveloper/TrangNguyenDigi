@@ -3267,6 +3267,21 @@ Trên fixture PDF thật (đề 3 phần, 5 câu, 1 hình tam giác vẽ vector)
 ## Fixture PDF (tạo ở S#35b, đang ở root repo — UNTRACKED)
 `de_kiem_tra_toan.pdf` (đề: PHẦN I 2 mcq [câu 2 có hình tam giác], PHẦN II 1 true_false 4 ý, PHẦN III 2 short_answer) + `dap_an_toan.pdf` (đáp án: C, A / Đ-Đ-Đ-S / 4, 40). Tạo bằng fpdf2 (script trong scratchpad phiên; gotcha fpdf2: phải `set_x(l_margin)` trước mỗi `multi_cell` width=0). Dùng làm fixture chuẩn cho Gate D/E1 — cân nhắc commit vào repo nếu muốn giữ lâu dài.
 
+## ⚠️ SỬA KẾT LUẬN — NGUYÊN NHÂN LÕI THẬT (cùng phiên, ngay sau đó)
+Sau khi commit fix distDir, dev server MỚI của agent cũng chết (exit 1) — lần này log bắt được thủ phạm thật:
+```
+Error: Could not load the "sharp" module using the win32-x64 runtime
+ERR_DLOPEN_FAILED: The specified procedure could not be found.
+...@img\sharp-win32-x64\lib\sharp-win32-x64-0.35.3.node
+```
+**Nguyên nhân lõi: HAI phiên bản sharp trong một tiến trình** — app cài `sharp@^0.35.3` (S#32) nhưng `next@16.2.7` mang `sharp@^0.34.5` riêng (optionalDependencies, dùng cho next/image). Cả 2 bundle `libvips-42.dll` CÙNG TÊN khác version (8.17 vs 8.18); Windows chỉ nạp 1 DLL/tên/tiến trình → bản nạp TRƯỚC thắng:
+- User duyệt trang có ảnh trước (Next optimize brand_logo → sharp 0.34 + libvips 8.17 nạp) → bấm Extract → sharp 0.35 của app đòi symbol 8.18 trong DLL 8.17 → ERR_DLOPEN_FAILED → **CHẾT CẢ TIẾN TRÌNH** → "Failed to fetch". (Log của user có warning ảnh logo ngay trước khi chết — khớp.)
+- Chiều ngược lại (Extract trước như lần tái hiện đầu) → libvips 8.18 nạp trước, sharp 0.34 chạy được trên 8.18 (ABI cộng dồn) → không crash. **Giải thích trọn tính không tất định.**
+
+**Fix (commit cùng S#36b):** hạ app về `sharp@^0.34.5` — trùng range của Next → npm **dedupe còn 1 bản vật lý duy nhất** (`npm ls sharp`: `sharp@0.34.5 deduped`) → cùng module instance, xung đột DLL bất khả thi về cấu trúc. API dùng (`extract/png/toBuffer/metadata`) không đổi giữa 0.34/0.35.
+**Verify quyết định:** ép đúng thứ tự kill — curl `/_next/image` (Next-sharp nạp trước, optimize thật 11.7KB webp) → chạy full upload flow → pipeline 8/8 OK (11.93s), crop [6/8] OK, server SỐNG. Thêm: `next build` chạy SONG SONG dev server không sao (nhờ distDir tách — S#36a vẫn là fix vệ sinh đúng, chỉ không phải nguyên nhân lõi). Đề test "Fixture v2" tạo trong lần verify đã xóa qua UI (tiện verify luôn flow Delete e2e).
+**⚠️ QUY TẮC MỚI: sharp của app PHẢI cùng range `^0.34.x` với optionalDependencies của next** — khi nâng Next, kiểm tra `node -e "console.log(require('next/package.json').optionalDependencies.sharp)"` rồi chỉnh theo; sau mọi thay đổi sharp/next chạy `npm ls sharp` phải thấy "deduped" duy nhất.
+
 ## CÒN NỢ sau S#36
-- Task 7/E1 phần còn lại: a11y (axe/keyboard) S-01/02/03; e2e đoạn publish→attempt→report (upload→extract→review ĐÃ pass); AC-027 count; OCR trên ảnh CHỤP/scan thật (fixture hiện là PDF text sạch).
+- Task 7/E1 phần còn lại: a11y (axe/keyboard) S-01/02/03; e2e đoạn publish→attempt→report (upload→extract→review + delete ĐÃ pass); AC-027 count; OCR trên ảnh CHỤP/scan thật (fixture hiện là PDF text sạch).
 - Nhắc vận hành: nếu gặp "Failed to fetch" → kiểm tra terminal dev server còn sống trước tiên (`curl localhost:3000`).
