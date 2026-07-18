@@ -180,28 +180,3 @@
     animation: none;
   }
 }
-
-/* ============================================================
-   TAB FADE-SLIDE (Layer 4 — Import Content Management, đồng bộ
-   TEMPLATE/L4 `fadeSlideIn`) — panel mới hiện ra khi đổi tab.
-   ============================================================ */
-@keyframes fade-slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.fade-slide-in {
-  animation: fade-slide-in 0.25s ease both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fade-slide-in {
-    animation: none;
-  }
-}
