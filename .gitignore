@@ -21,3 +21,8 @@ Thumbs.db
 # Screenshots tạm
 TEMP_SCREENSHOT/*
 !TEMP_SCREENSHOT/.gitkeep
+SCREENSHOT/temporary_screenshot/
+
+# Tooling / máy cục bộ
+.playwright-mcp/
+.claude/settings.local.json
