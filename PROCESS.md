@@ -3216,3 +3216,29 @@ Engineer chốt "bắt đầu code". Các task được code theo nhóm compile 
 - File mới: `lib/ugc/tfCodec.ts` (encode/decode/format Đ/S — thuần, client-safe). `types/attempt.ts` không đâu import (legacy) — không đổi.
 - Test đã cập nhật: assembleExam (fixture +part:1 cơ học + bộ Gate C/TF/short mới), extractors (payload v2.1), validateInput (parts/part), fromRows (+questionIdentityFromId 2 dạng).
 - **Verify tới checkpoint giữa chừng**: tsc 0 lỗi + vitest 99/99 (sau A→C); các sửa D1–D3 sau đó CHƯA chạy lại verify do classifier tool tạm sập — **việc đầu tiên phiên sau: `tsc --noEmit` + `vitest run` + `next build` + `npm run check:bundle`**, sửa nốt lỗi compile nếu có (nghi vấn còn sót: chỗ nào đó còn dùng answers Record<string,ChoiceId>).
+
+---
+
+# [UGC v2.1] — Verify cuối, dọn dead code, commit + push (S#35, 2026-07-18)
+
+## Yêu cầu
+"Kiểm tra task còn dang dở thì hoàn thiện, xong thì push. Dọn repo (xoá file/folder không vai trò, không chức năng runtime)." Sau đó: "Gỡ dead code + chỉ cách chạy lại query."
+
+## Việc đã làm
+- **Verify lại toàn bộ (đúng như dặn ở checkpoint D1–D3)** — phát hiện tsc **KHÔNG sạch** như PROCESS ghi (S#34 chưa verify lại sau D1–D3): đúng nghi vấn "answers Record<string,ChoiceId>" — `(layer2)/actions.ts::submitExam` dựng `Map` với `questionType` narrower nên type-predicate `q is Question` fail. **Fix**: khai báo `new Map<string, Question>(...)` tường minh. Gỡ luôn import `ChoiceId` thừa trong `computeScore.ts`.
+- **Sau fix**: `tsc` 0 lỗi · `vitest run` 102/102 (7 file) · `next build` OK · `npm run check:bundle` PASS. Lỗi eslint `ExamTimer.tsx` ("ref during render") là **có sẵn từ commit 7957cee**, không thuộc UGC, không chặn build → để nguyên.
+- **Dọn repo**: xoá rác tạm `.playwright-mcp/` (log debug), `dap_an.png`, `prompt.txt`; gitignore `.playwright-mcp/` + `.claude/settings.local.json` + `SCREENSHOT/temporary_screenshot/`. GIỮ `docs/`, `DESIGN.md`, `ASSETS/images/*` (design source + license), `SCREENSHOT/design_reference/`. `parseExam.ts` đã không còn (không cần gỡ).
+- **Gỡ dead code** (commit `8fc6ea3`): route chết `/admin/import` + `ImportContentManagement.tsx` (mock UI thiết kế cũ, nav đã trỏ `/upload` từ Task 6.1) + khối CSS `fade-slide-in` độc quyền trong `globals.css`. Route 11 → 10. Lưu ý: build đầu báo lỗi từ cache route-type cũ trong `.next/` → xoá `.next` build lại là sạch.
+- **Commit + push lên `origin/main`** (repo `undetecteddeveloper/TrangNguyenDigi`): `a3a7466` chore hygiene → `257b03a` feat UGC (v2.0+v2.1) → `8fc6ea3` chore gỡ dead code. **Toàn bộ code v2.0+v2.1 giờ ĐÃ nằm trên remote** (trước đây mọi phiên đều chưa commit).
+
+## ✅ GATE A XANH VỚI SCHEMA v2.1 (§8c) — 2026-07-18
+Engineer đã dán `schema.sql` (có §8c) vào Supabase SQL Editor + Run, rồi chạy `npx tsx supabase/test-rls.ts` → **TẤT CẢ PASS**: 7 check attempt cũ + 22 check UGC (R-a…R-l bảng + R-m…R-o Storage). **Dependency manual lớn nhất (dán schema + Gate A) đã xong.**
+
+## CÒN NỢ (chỉ còn phần browser/real-file — cần engineer chạy tay hoặc playwright MCP)
+- **Gate D** (bbox — >0 hình phát hiện trên file PDF/ảnh THẬT): chưa xác minh trên file thật (mới chỉ smoke test ảnh render sạch từ SVG ở S#33). Đây là kill criterion của B1 — phải đo trên fixture thật (1 mã đề 4 trang + trang đáp án của đề TN THPT 2025).
+- **Task 7 / E1 QA**: a11y (axe/keyboard) S-01/02/03 + e2e đầy đủ upload→extract→review→publish→attempt→report qua browser thật + AC-027 count trước/sau. GEMINI_API_KEY thật đã có trong `.env.local`.
+- Rủi ro OCR chữ Việt + công thức trên ảnh/PDF chụp/scan thật vẫn là ẩn số (xem S#33 mục Rủi ro).
+
+## Cách chạy lại query Gate A (ghi để nhớ)
+1. Copy toàn bộ `SOURCE/supabase/schema.sql` → Supabase Dashboard → SQL Editor → Run (idempotent, dán lại an toàn). Bắt buộc mỗi khi sửa schema.
+2. `cd SOURCE` rồi `npx tsx supabase/test-rls.ts` (script tự đọc `SOURCE/.env.local`, đủ 3 key URL/ANON/SERVICE_ROLE — không cần export shell; `tsx` chưa cài local nên npx tự tải bản tạm).
