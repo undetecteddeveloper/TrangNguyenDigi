@@ -2,10 +2,11 @@
 
 | | |
 |---|---|
-| **Version** | 2.0 |
-| **Date** | 2026-07-15 |
-| **Status** | Draft — major redesign. Supersedes v1.1 (plain-text paste + single-admin moderation). Aligns to PRD v2.0: authors **upload two files** (question file + answer file, image/PDF), **AI extracts** server-side, code assembles, the **author reviews and corrects** the assembled exam, and publishes. **No admin screens.** |
-| **PRD** | `docs/prd/ugc-exam-upload-prd.md` (v2.0) |
+| **Version** | 2.2 (base v2.0; v2.2 delta in §v2.2 Amendment) |
+| **Date** | 2026-07-20 (v2.0: 2026-07-15) |
+| **Status** | Draft — major redesign. Supersedes v1.1 (plain-text paste + single-admin moderation). Aligns to PRD v2.0: authors **upload two files** (question file + answer file, image/PDF), **AI extracts** server-side, code assembles, the **author reviews and corrects** the assembled exam, and publishes. **No admin screens.** **§v2.2 Amendment** adds AI metadata intake and makes Entry Mode functional. |
+| **PRD** | `docs/prd/ugc-exam-upload-prd.md` (v2.2) |
+| **Note** | The v2.1 multi-part changes (ADR-0005) landed in the Design Doc and code without a UI Spec revision; the S-03 part-grouping and `true_false`/`short_answer` editors are specified in Design Doc §v2.1 Amendment §UI delta. This spec's component definitions are otherwise current. |
 
 ## Overview
 
@@ -589,6 +590,120 @@ Compliance target: WCAG 2.1 AA on all new/extended surfaces. Audit gate: 0 serio
 
 Same ivory-background ratios as v1.1: body/badge text `#1B1512` (~12.9:1 ✓); vermillion `#A62C2B` text/buttons (~5.4:1 ✓); muted `#6B655C` (~4.5:1, never the only carrier of essential info — statuses/errors use foreground/vermillion); bronze gold `#B8863B` **prohibited as text** (~2.5:1), used only for borders/rules/underlines; non-text UI (badge borders, focus, error indicators) ≥ 3:1; the `#D8C9A8` hairline is decorative only.
 
+## v2.2 Amendment — AI Metadata Intake and a Functional Entry Mode (2026-07-20)
+
+Specifies the UI delta for PRD R22–R25 / AC-034–AC-040 per ADR-0007. Only what changes is listed; every component not named here is unchanged.
+
+### Principle
+
+The author submits two files and presses Extract **once**. There is no new screen and no new stop. Metadata arrives with the extracted questions and is corrected in the same mandatory review that already exists for questions — so the delta is concentrated in two places: the metadata block on S-01 becomes optional-and-explained, and the review screen gains an editable metadata block.
+
+### Component: EntryModeField (existing, becomes functional)
+
+Currently ships as pure UI (both values call the same action). It becomes the real switch between two documented behaviours.
+
+| Value | S-01 metadata block | Extract enabled when |
+|-------|--------------------|----------------------|
+| `Automatic` (default) | Collapsed by default into a disclosure headed "Exam details — filled in automatically"; fields present, empty, and optional; no `*` markers, no `aria-required` | Both files present and valid |
+| `Manual` | Expanded; fields required exactly as v2.0 (`*` + `aria-required`) | Both files present **and** title/subject/grade/duration valid |
+
+Switching mode never clears typed values. If the author typed values and then switches to Automatic, those values are kept and **take precedence over extraction** — the author's own input is never overwritten by the model. The mode note text stays as shipped for `Automatic` and is corrected for `Manual` to "Fill in every exam detail yourself; AI will still extract the questions and answers."
+
+#### Interaction Definition
+
+| AC ID | EARS Condition | User Action | System Response | Error Handling |
+|-------|---------------|-------------|-----------------|----------------|
+| AC-036 | When mode is `Manual` and a required field is empty | Click "Extract" | Blocked client-side; per-field messages; focus to first invalid field | v2.0 behaviour, unchanged |
+| AC-037 | When mode is `Automatic` and metadata is empty but both files are valid | Click "Extract" | Extraction proceeds; no metadata blocking | — |
+
+---
+
+### Component: MetadataFields (extended)
+
+Gains an `optional` presentation mode (drives the `*`/`aria-required` and the empty-state hint) and an `aiFilled` marker set.
+
+- **On S-01** in Automatic mode: rendered inside the disclosure with the caption "Leave these empty — we'll read them from your file. You can edit everything before publishing."
+- **On S-03** (new usage): the same component renders the exam's metadata as an editable block above the question list, replacing the read-only metadata summary described in §ReviewScreen.
+- **AI-proposed marker**: a field populated by extraction and not yet touched by the author carries a small `.eyebrow`-styled caption "from your file" beneath it, in `muted`, plus `aria-describedby` pointing at that caption. The marker is **informational only** — it never blocks, never colours the field, and disappears once the author edits the field. Per DESIGN.md the marker uses `muted`, not `accent` or `primary`; it is not a status and must not read as one.
+- **Missing required field**: rendered with the standard error treatment already used for `fieldErrors`, driven by the `META_INCOMPLETE` items in the error panel — no new visual language.
+
+#### State x Display Matrix
+
+| State | Default | Loading | Empty | Error | Partial |
+|-------|---------|---------|-------|-------|---------|
+| Display (S-01, Automatic) | Disclosure collapsed, fields empty and optional | Read-only during extraction, not cleared | Collapsed with the "we'll read them from your file" caption | n/a (no metadata errors at upload in this mode) | Author typed some fields: disclosure auto-expands so typed values stay visible |
+| Display (S-01, Manual) | Expanded, required markers | Read-only during extraction | Required-field hints | Per-field messages (AC-036) | Some fields valid, some not |
+| Display (S-03) | Editable block; AI-filled fields carry "from your file" | Saving indicator on the block | n/a | Missing/invalid required field: field-level message + matching error-panel item; Publish disabled (AC-038) | Some fields AI-filled, some author-typed — markers only on the untouched AI-filled ones |
+
+#### Interaction Definition
+
+| AC ID | EARS Condition | User Action | System Response | Error Handling |
+|-------|---------------|-------------|-----------------|----------------|
+| AC-034 | When extraction filled the metadata | Open S-03 | Every field shows its extracted value, editable, marked "from your file" | — |
+| AC-035 | When a field was not printed on the page | Open S-03 | That field is empty — never a guessed value | Author fills it |
+| AC-038 | While a required field is missing/invalid | View S-03 | Error-panel item names the field; Publish unavailable | Resolves on correction |
+| AC-039 | When the author supplies the missing fields | Edit + Publish | Publishes normally | — |
+
+---
+
+### Component: ExtractBar (extended)
+
+The disabled-reason hint becomes mode-aware: in `Automatic` the only reason is a missing/invalid file ("Add both files to continue"); in `Manual` the existing metadata reasons remain. The button label and the processing hand-off are unchanged.
+
+---
+
+### Component: ExtractionProgress (extended)
+
+The progress copy names the metadata step so the flow is legible: "Reading your exam details…" appears alongside the existing extraction messaging. Metadata extraction runs in parallel with question and answer extraction, so it is a **label within the existing single progress state**, not a new sequential stage with its own bar.
+
+---
+
+### Component: ExtractionErrorPanel (extended)
+
+Gains metadata items alongside the existing per-question items, using the same bordered-vermillion treatment and the same "Fix these before publishing" heading:
+
+- "Exam details — the title is missing. Add it above before publishing." (`META_INCOMPLETE`)
+- "Exam details — we couldn't read the exam details from your file. Fill them in above." (`META_EXTRACTION_FAILED`)
+- "Exam details — the duration read as 900 minutes, outside the allowed range. Correct it above." (`META_INVALID`)
+
+Metadata items sort **above** per-question items (they gate publishing for the whole exam) and link to (scroll/focus) the metadata block rather than a question card.
+
+---
+
+### Component: ReviewScreen (extended)
+
+The read-only "metadata summary" described in the v2.0 definition becomes the **editable MetadataFields block** described above. Layout position is unchanged (between the "← My exams" link/StatusBadge and the error panel/question list), so the screen's rhythm and `max-w-2xl` column are untouched.
+
+---
+
+### Screen List and Transitions (delta)
+
+`S-01 → S-03` gains one transition condition; no screen is added or removed.
+
+| Source | Destination | Trigger | Guard Condition |
+|--------|------------|---------|-----------------|
+| S-01 | S-03 | Extract succeeds, `Automatic` mode | Both files valid + question/answer extraction and assembly clean. **Metadata validity is not a guard here** (AC-037) |
+| S-01 | S-03 | Extract succeeds, `Manual` mode | v2.0 guard unchanged: metadata valid + both files present + extraction/assembly clean |
+| S-03 | S-02 | Publish succeeds | Assembly clean **and required metadata valid** (AC-038) — the metadata half is new |
+
+### Accessibility (delta)
+
+- The "from your file" marker is exposed via `aria-describedby`, not by colour or icon alone (it has no colour of its own).
+- The S-01 metadata disclosure is a native `<details>`/button-controlled region with `aria-expanded`; collapsing it must never hide a field that currently holds an error or an author-typed value — the block auto-expands in both cases.
+- Metadata error-panel items are part of the existing `role="alert"` panel and are announced with it; they are not a separate live region.
+- Switching Entry Mode announces the resulting requirement change via the mode note (`aria-live="polite"`, already present on the note element).
+
+### Subject becomes a `<select>` (v2.2, O-9)
+
+`subject` is no longer a free-text input on either screen. It renders as a `<select>` over the canonical `SUBJECTS` list with Vietnamese option labels and canonical values (`Toán (Math)`, `Vật lý (Physics)`, …). The empty option reads **"From file"** in Automatic mode on S-01 and **"Select a subject"** everywhere else. On S-03 the control is disabled-in-effect for published exams (the server refuses the change and returns a field error explaining that subject and grade are fixed after publishing).
+
+### Open Items (v2.2)
+
+| ID | Description | Owner |
+|----|-------------|-------|
+| TBD-07 | Whether the "from your file" marker persists across a save/reload or is session-only. | Design Doc | **RESOLVED (2026-07-20): session-only.** Carried by `?src=auto` on the post-extraction redirect; seeded from the non-empty metadata fields on first render, cleared per-field on edit, gone after a reload. See Design Doc O-7. |
+| TBD-08 | Exact copy and placement of the S-01 disclosure heading in Vietnamese vs. English — the rest of the S-01 surface is currently English. | Product | Shipped in English ("Exam details — filled in automatically") to match the surrounding surface; revisit if S-01 is localized as a whole. |
+
 ## Open Items
 
 | ID | Description | Owner |
@@ -607,3 +722,4 @@ Same ivory-background ratios as v1.1: body/badge text `#1B1512` (~12.9:1 ✓); v
 | 2026-07-13 | 1.0 | Initial version from PRD v1.1 (paste + admin moderation) | ui-spec agent (Claude) |
 | 2026-07-14 | 1.1 | Reviewer conditions I001–I005; product decisions TBD-01/TBD-02 | Claude (Opus 4.8) |
 | 2026-07-15 | 2.0 | **Major redesign to PRD v2.0**: two-file upload + server-side AI extraction + author review/edit of the assembled exam (with images) + author-gated publish; removed the paste flow and all admin screens; Delete replaces Withdraw; reports read by the owner out-of-band | Claude (Opus 4.8) |
+| 2026-07-20 | 2.2 | **§v2.2 Amendment**: AI metadata intake (ADR-0007) — EntryModeField becomes functional (Automatic/Manual with documented behaviours); MetadataFields gains an optional presentation and an "from your file" AI-proposed marker, and is reused as an editable block on S-03; ExtractionErrorPanel gains metadata items that gate publishing; ExtractBar disabled-reasons become mode-aware. No new screen; no confirmation stop | Claude (Opus 4.8) |

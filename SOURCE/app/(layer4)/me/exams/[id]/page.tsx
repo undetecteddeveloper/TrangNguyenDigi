@@ -7,7 +7,13 @@ import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 import { getMyExam } from "@/app/(layer4)/queries";
 import { ReviewScreen } from "@/app/(layer4)/_components/ReviewScreen";
 
-export default async function ReviewExamPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ReviewExamPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ src?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/?auth=signin");
 
@@ -18,9 +24,18 @@ export default async function ReviewExamPage({ params }: { params: Promise<{ id:
   // processing: extract chưa xong (không nên vào đây trực tiếp) → về danh sách.
   if (detail.status === "processing") redirect("/me/exams");
 
+  // v2.2: ?src=auto — phiên đến thẳng từ extract Automatic → marker "from your
+  // file" trên field AI điền (session-derived, O-7; reload mất là chủ đích).
+  const { src } = await searchParams;
+
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
-      <ReviewScreen examId={detail.id} status={detail.status} initialExam={detail.exam} />
+      <ReviewScreen
+        examId={detail.id}
+        status={detail.status}
+        initialExam={detail.exam}
+        srcAuto={src === "auto"}
+      />
     </main>
   );
 }

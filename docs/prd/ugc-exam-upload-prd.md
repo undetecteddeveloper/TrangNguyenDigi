@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 |
-| **Date** | 2026-07-17 (v2.0: 2026-07-15) |
-| **Status** | v2.0 implemented (17 tasks, code-complete). **v2.1 amendment in progress** — see §v2.1 Amendment below. Product decisions locked with product owner (2026-07-15; v2.1 scope decisions 2026-07-17). |
+| **Version** | 2.2 |
+| **Date** | 2026-07-20 (v2.1: 2026-07-17; v2.0: 2026-07-15) |
+| **Status** | v2.0 implemented (17 tasks, code-complete). v2.1 amendment in progress. **v2.2 amendment — see §v2.2 Amendment below.** Product decisions locked with product owner (2026-07-15; v2.1 scope decisions 2026-07-17; v2.2 scope decisions 2026-07-20). |
 | **Scale** | LARGE — document chain: PRD → UI Spec → ADR → Design Doc → Work Plan |
 
 ## v2.1 Amendment — National 3-Part Exam Format (2026-07-17)
@@ -25,6 +25,33 @@ Live testing v2.0 with the official 2025 national graduation exam (đề thi t�
 **Also corrected in v2.1**: the AI provider is **Google Gemini** (free tier; swapped from Anthropic on 2026-07-17 for billing reasons — ADR-0006), and the figure bounding-box contract moves to Gemini's native trained format (fixing 0% figure detection observed live). Auto-scoring for R19/R20 types and per-part scoring weights are explicitly **out of scope** (future scoring feature).
 
 Details: ADR-0005 (multi-part data model), ADR-0006 (Gemini protocol), Design Doc §v2.1 Amendment.
+
+## v2.2 Amendment — AI Metadata Intake in the Upload Loop (2026-07-20)
+
+The upload screen already ships an **Entry Mode** control offering *Automatic* and *Manual*, and its Automatic option tells every author "AI will scan your uploaded files and extract the exam automatically". The control is currently inert — both values run the same pipeline, and in both the author must type all seven metadata fields (title, subject, grade, duration, school, school year, semester) while looking at a document that already prints every one of them. v2.2 makes the control real.
+
+Vietnamese exam papers carry the whole metadata block in the first ~15 lines in a near-fixed shape (`SỞ GD&ĐT …` / `TRƯỜNG THPT …` / `ĐỀ KIỂM TRA CUỐI HỌC KÌ I` / `Môn: Toán – Lớp 12` / `Năm học: 2024 – 2025` / `Thời gian làm bài: 90 phút`), which makes this a materially easier extraction than the question body.
+
+**Scope added by v2.2** (product owner decisions, 2026-07-20):
+
+- **R22 — AI metadata intake**: In `Automatic` mode a third server-side extractor reads the question file's first page and fills the exam metadata. It runs in the same submission as question/answer extraction — **there is no confirmation stop before extraction** — and the author corrects any field in the existing mandatory review (S-03). Every field the model cannot find on the page is returned empty rather than guessed.
+  - AC-034: Given a question file whose header prints the exam metadata, when the author submits in Automatic mode having typed nothing, then the assembled exam carries the printed title, subject, grade, duration, school, school year and semester, and the review screen shows each of them as editable and marked AI-proposed.
+  - AC-035: Given a question file whose header omits a field (e.g. no school year is printed), when metadata extraction runs, then that field is left empty and no value is fabricated for it.
+- **R23 — Entry Mode becomes functional**: `Automatic` (default) leaves the metadata fields optional at upload and fills them from the file; `Manual` keeps v2.1 behaviour exactly — the author types the required fields and they are validated before any AI call.
+  - AC-036: Given Manual mode, when the author submits with title/subject/grade/duration empty, then upload is blocked with field-level messages and no AI call is made (v2.1 behaviour preserved).
+  - AC-037: Given Automatic mode, when the author submits with the metadata fields empty but both files valid, then extraction proceeds.
+- **R24 — Metadata validity gates publishing, not uploading**: Because Automatic mode has no metadata to check at submission time, required-field validity becomes a precondition of publishing instead. An exam missing a required field stays in `review` and surfaces the problem in the same error panel that reports mis-read questions.
+  - AC-038: Given an exam whose required metadata is missing or invalid after extraction, when the author opens it, then the error panel names the missing fields and Publish is unavailable until they are supplied.
+  - AC-039: Given the author fills the missing fields in review, when they publish, then the exam publishes normally.
+- **R25 — Metadata extraction never fails the upload**: An AI error, an unparseable header, or an all-empty result does not abort the run. Question and answer extraction complete, the exam is created with a provisional title derived from the filename, and the author supplies the metadata in review.
+  - AC-040: Given metadata extraction fails outright, when the run completes, then the extracted questions are still present and reviewable and the exam reports only the missing metadata.
+
+- **R26 — Normalized subject vocabulary** (product decision, 2026-07-20): `subject` is chosen from a fixed list rather than free text, so the catalog's subject filter does not fragment once a model writes the field. A subject the model cannot map to the list is left empty for the author to pick.
+  - AC-041: Given a question file printing "Môn: Toán", when metadata extraction runs, then the exam's subject is the canonical `Math` (the same value seeded exams use), and the catalog's subject facet gains no new variant.
+
+**Explicitly out of scope for v2.2**: per-field acknowledgement of AI-proposed metadata (the mandatory review plus the explicit Publish action is the confirmation, as it already is for AI-extracted stems and choices); metadata extraction from the *answer* file; any change to answer-key authority, which remains the answer file alone.
+
+Details: ADR-0007 (metadata intake + validation-gate shift), Design Doc §v2.2 Amendment, UI Spec §v2.2 Amendment.
 
 ## Overview
 
@@ -174,6 +201,7 @@ Only `processing` consumes AI/compute; `review`/`draft` are held server-side. Se
 
 - [ ] **R2 — Exam metadata form**: The upload page collects exam metadata, mirroring the existing catalog schema: title, subject, grade, duration (minutes) — required; school, school year, semester — optional (nullable; render as "None" fallback in the catalog).
   - AC-003: Given the upload form, when the user leaves title, subject, grade, or duration empty, then upload is blocked with a field-level message identifying the missing value.
+  - **Superseded in part by v2.2 (R23/R24)**: AC-003 continues to hold for `Manual` mode (restated as AC-036). In `Automatic` mode the fields may be left empty at upload and are filled by extraction; required-field validity is enforced at publish instead (AC-038).
   - AC-004: Given the upload form, when school, school year, or semester are left empty, then the flow proceeds and the catalog renders its existing null fallback for those fields.
 
 - [ ] **R3 — Two-file upload**: The author provides two files: a **question file** and an **answer file**. Each is an image (common formats) or a PDF. The server validates file type, size, and page count against fixed limits before any AI call.
@@ -291,6 +319,7 @@ The site is pre-launch with no traffic; metrics are mechanism-focused and verifi
 4. **Image mapping correctness**: for a fixture set of exams with figures, 100% of cropped images are attached to the correct question number on the assembled exam — measured by an assembly test on image fixtures.
 5. **Backfill completeness**: catalog exam count after deployment equals the count before deployment, and 100% of seeded exams have `published` status — measured by a before/after count query.
 6. **No key exposure**: no code path calls the AI provider from the client; the key exists only in server configuration — verified by code inspection and a build-time check that the key is not bundled client-side.
+7. **Metadata intake correctness (v2.2)**: on the real-file fixture set, `subject`, `grade` and `durationMinutes` are read correctly from a majority of files, and **zero fabricated values** appear for fields not printed on the page — measured by a fixture check plus the normalization unit suite. Fabrication is a hard fail, not a percentage: an invented value looks plausible at review and so escapes the author's eye, whereas an empty field is visibly empty (ADR-0007 kill criterion).
 
 ### Qualitative Metrics
 

@@ -1,10 +1,19 @@
 "use client";
 
-// UploadForm — container S-01 (UI Spec §UploadForm / Task 6.2). MỘT nơi giữ
-// state: metadata + 2 file. KHÔNG BAO GIỜ clear khi lỗi (giữ nguyên để sửa).
-// Extract disabled tới khi metadata hợp lệ (client) + đủ 2 file. Gọi
-// extractAndAssemble (server): thành công → action tự redirect /me/exams/[id];
-// thất bại → hiện lỗi, giữ nguyên form.
+// UploadForm — container S-01 (UI Spec §UploadForm / Task 6.2 + v2.2 M6). MỘT
+// nơi giữ state: metadata + 2 file. KHÔNG BAO GIỜ clear khi lỗi (giữ nguyên để
+// sửa). Gọi extractAndAssemble (server): thành công → action tự redirect
+// /me/exams/[id] (?src=auto ở chế độ Automatic); thất bại → hiện lỗi, giữ form.
+//
+// v2.2 (ADR-0007) — Entry Mode THÀNH THẬT:
+//   - Automatic (mặc định): khối metadata gấp lại "filled in automatically",
+//     field optional (AC-037) — chỉ validate 2 file; AI đọc metadata từ trang
+//     1 file đề; gate chuyển sang publish. Đã gõ gì thì giá trị đó THẮNG AI.
+//   - Manual: hành vi v2.1 — validate required client-side trước submit
+//     (AC-036), server validateExamMeta vẫn là nguồn sự thật cuối.
+//   - Đổi mode không xoá giá trị; khối metadata tự mở khi có giá trị đã gõ
+//     hoặc có lỗi (không bao giờ giấu field đang lỗi — a11y UI Spec §v2.2).
+// KHÔNG bao gồm navbar — do (layer4)/layout.tsx cung cấp.
 
 import { useState, useTransition } from "react";
 import { extractAndAssemble } from "@/app/(layer4)/actions";
@@ -15,7 +24,8 @@ import {
   type ExamMetaFormValue,
 } from "./MetadataFields";
 import { FileUploadFields } from "./FileUploadFields";
-import { UploadGuide } from "./UploadGuide";
+import { ImportInstructions } from "./ImportInstructions";
+import { EntryModeField, type EntryMode } from "./EntryModeField";
 import { ExtractionProgress } from "./ExtractionProgress";
 
 const EMPTY_META: ExamMetaFormValue = {
@@ -28,36 +38,69 @@ const EMPTY_META: ExamMetaFormValue = {
   semester: "",
 };
 
-/** Check nhẹ phía client để bật/tắt nút Extract (server validate authoritative). */
-function metaLooksValid(m: ExamMetaFormValue): boolean {
+/** Validate required field phía client — CHỈ chế độ Manual (AC-036). */
+function validateRequired(m: ExamMetaFormValue): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!m.title.trim()) errors.title = "Please enter the exam title.";
+  if (!m.subject.trim()) errors.subject = "Please select the subject.";
   const grade = Number(m.grade);
+  if (!m.grade.trim() || !Number.isInteger(grade) || grade < LIMITS.MIN_GRADE || grade > LIMITS.MAX_GRADE) {
+    errors.grade = `Please enter a grade between ${LIMITS.MIN_GRADE} and ${LIMITS.MAX_GRADE}.`;
+  }
   const duration = Number(m.durationMinutes);
-  return (
-    m.title.trim().length > 0 &&
-    m.subject.trim().length > 0 &&
-    Number.isInteger(grade) &&
-    grade >= LIMITS.MIN_GRADE &&
-    grade <= LIMITS.MAX_GRADE &&
-    Number.isInteger(duration) &&
-    duration >= LIMITS.MIN_DURATION &&
-    duration <= LIMITS.MAX_DURATION
-  );
+  if (
+    !m.durationMinutes.trim() ||
+    !Number.isInteger(duration) ||
+    duration < LIMITS.MIN_DURATION ||
+    duration > LIMITS.MAX_DURATION
+  ) {
+    errors.durationMinutes = "Please enter the exam duration.";
+  }
+  return errors;
 }
 
 export function UploadForm() {
   const [meta, setMeta] = useState<ExamMetaFormValue>(EMPTY_META);
+  const [entryMode, setEntryMode] = useState<EntryMode>("automatic");
+  const [metaOpen, setMetaOpen] = useState(false);
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [answerFile, setAnswerFile] = useState<File | null>(null);
+  const [clientErrors, setClientErrors] = useState<Record<string, string> | null>(null);
+  const [fileErrors, setFileErrors] = useState<{ question?: string; answer?: string }>({});
   const [error, setError] = useState<UgcActionError | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const canExtract =
-    metaLooksValid(meta) && !!questionFile && !!answerFile && !pending;
+  // Server fieldErrors (sau submit) đè lên client errors (trước submit) — cùng
+  // key name (title/subject/grade/durationMinutes/school/schoolYear/semester).
+  const fieldErrors = error?.fieldErrors ?? clientErrors ?? undefined;
+
+  const isAutomatic = entryMode === "automatic";
+  const hasTypedMeta = Object.values(meta).some((v) => v.trim() !== "");
+  const hasMetaErrors = !!fieldErrors && Object.keys(fieldErrors).length > 0;
+  // Không bao giờ giấu field có giá trị/lỗi sau disclosure gấp (UI Spec §v2.2).
+  const metaExpanded = !isAutomatic || metaOpen || hasTypedMeta || hasMetaErrors;
 
   function onSubmit() {
-    if (!canExtract || !questionFile || !answerFile) return;
+    if (pending) return;
+
+    // Automatic: metadata optional (AC-037) — chỉ chặn thiếu file.
+    const requiredErrors = isAutomatic ? {} : validateRequired(meta);
+    const nextFileErrors: { question?: string; answer?: string } = {};
+    if (!questionFile) nextFileErrors.question = "Please attach the exam paper.";
+    if (!answerFile) nextFileErrors.answer = "Please attach the answer key.";
+
+    if (Object.keys(requiredErrors).length > 0 || nextFileErrors.question || nextFileErrors.answer) {
+      setClientErrors(Object.keys(requiredErrors).length > 0 ? requiredErrors : null);
+      setFileErrors(nextFileErrors);
+      return;
+    }
+
+    setClientErrors(null);
+    setFileErrors({});
     setError(null);
+
     const fd = new FormData();
+    fd.set("entryMode", entryMode);
     fd.set("title", meta.title);
     fd.set("subject", meta.subject);
     fd.set("grade", meta.grade);
@@ -65,8 +108,8 @@ export function UploadForm() {
     fd.set("school", meta.school);
     fd.set("schoolYear", meta.schoolYear);
     fd.set("semester", meta.semester);
-    fd.set("questionFile", questionFile);
-    fd.set("answerFile", answerFile);
+    fd.set("questionFile", questionFile as File);
+    fd.set("answerFile", answerFile as File);
 
     startTransition(async () => {
       // Thành công → action gọi redirect() (ném NEXT_REDIRECT, Next xử lý).
@@ -77,20 +120,22 @@ export function UploadForm() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl text-foreground">Upload an exam</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Add the details, attach your question and answer files, then extract.
+        <h1 className="text-3xl text-foreground">Import Exam Document</h1>
+        <div className="mt-2 h-px w-12 bg-ring" />
+        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+          Upload the exam and answer key to the system. Choose automatic mode to let AI
+          scan the document, or enter details manually for more control.
         </p>
       </div>
 
-      <UploadGuide />
+      <ImportInstructions />
 
       {error && (
         <div
           role="alert"
-          className="rounded-lg border border-brand bg-brand/8 px-4 py-3 text-sm text-brand"
+          className="rounded-[4px] border border-brand bg-brand/8 px-4 py-3 text-sm text-brand"
         >
           {error.message}
           {error.errors && error.errors.length > 0 && (
@@ -103,43 +148,91 @@ export function UploadForm() {
         </div>
       )}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg text-foreground">Details</h2>
+      <EntryModeField value={entryMode} onChange={setEntryMode} disabled={pending} />
+
+      {isAutomatic ? (
+        // Khối metadata gấp/mở (cùng idiom ImportInstructions: grid-rows 0fr↔1fr).
+        <div className="rounded-[4px] border border-border">
+          <button
+            type="button"
+            onClick={() => setMetaOpen((v) => !v)}
+            aria-expanded={metaExpanded}
+            className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left text-sm font-medium text-foreground"
+          >
+            <span>
+              Exam details{" "}
+              <span className="font-normal text-muted-foreground">
+                — filled in automatically
+              </span>
+            </span>
+            <span
+              aria-hidden
+              className={[
+                "text-ring transition-transform duration-300",
+                metaExpanded ? "rotate-180" : "",
+              ].join(" ")}
+            >
+              ▾
+            </span>
+          </button>
+          <div
+            className={[
+              "grid transition-[grid-template-rows] duration-300 ease-out",
+              metaExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            ].join(" ")}
+          >
+            <div className="overflow-hidden">
+              <div className="px-4 pb-4">
+                <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+                  Leave these empty — we&apos;ll read them from your file. You can edit
+                  everything before publishing. Anything you type here wins over the AI.
+                </p>
+                <MetadataFields
+                  value={meta}
+                  onChange={(patch) => setMeta((m) => ({ ...m, ...patch }))}
+                  fieldErrors={fieldErrors}
+                  disabled={pending}
+                  optionalMode
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
         <MetadataFields
           value={meta}
           onChange={(patch) => setMeta((m) => ({ ...m, ...patch }))}
-          fieldErrors={error?.fieldErrors}
+          fieldErrors={fieldErrors}
           disabled={pending}
         />
-      </section>
+      )}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg text-foreground">Files</h2>
-        <FileUploadFields
-          questionFile={questionFile}
-          answerFile={answerFile}
-          onSelectQuestion={setQuestionFile}
-          onSelectAnswer={setAnswerFile}
-          disabled={pending}
-        />
-      </section>
+      <FileUploadFields
+        questionFile={questionFile}
+        answerFile={answerFile}
+        onSelectQuestion={(f) => {
+          setQuestionFile(f);
+          if (f) setFileErrors((fe) => ({ ...fe, question: undefined }));
+        }}
+        onSelectAnswer={(f) => {
+          setAnswerFile(f);
+          if (f) setFileErrors((fe) => ({ ...fe, answer: undefined }));
+        }}
+        disabled={pending}
+        questionError={fileErrors.question}
+        answerError={fileErrors.answer}
+      />
 
-      {pending && <ExtractionProgress />}
+      {pending && <ExtractionProgress metaStep={isAutomatic} />}
 
-      {/* ExtractBar */}
-      <div className="flex items-center justify-end gap-4 border-t border-border pt-6">
-        {!canExtract && !pending && (
-          <p className="text-xs text-muted-foreground">
-            Fill in the required details and attach both files to continue.
-          </p>
-        )}
+      <div className="flex justify-start pt-2">
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!canExtract}
-          className="rounded-[4px] bg-brand px-6 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          disabled={pending}
+          className="rounded-[4px] bg-brand px-7 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-brand-foreground transition-colors duration-200 hover:bg-[#8F2523] disabled:opacity-60"
         >
-          {pending ? "Extracting…" : "Extract"}
+          {pending ? "Processing…" : "Start"}
         </button>
       </div>
     </div>

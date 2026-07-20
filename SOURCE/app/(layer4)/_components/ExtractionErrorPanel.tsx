@@ -19,7 +19,12 @@ export function ExtractionErrorPanel({ errors }: { errors: UgcError[] }) {
       <ul className="mt-2 flex flex-col gap-1">
         {errors.map((e, i) => (
           <li key={i}>
-            {e.questionNumber != null ? (
+            {e.field !== undefined ? (
+              // v2.2: lỗi META_* link tới khối metadata (không tới card câu).
+              <a href="#exam-details" className="underline underline-offset-2 hover:opacity-80">
+                {e.message}
+              </a>
+            ) : e.questionNumber != null ? (
               <a
                 href={`#p${e.partNumber ?? 1}q${e.questionNumber}`}
                 className="underline underline-offset-2 hover:opacity-80"

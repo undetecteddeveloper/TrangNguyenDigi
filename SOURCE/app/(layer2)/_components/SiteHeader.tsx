@@ -22,6 +22,7 @@ type NavItem = { label: string; href: string };
 // Cùng bộ nav với HomeSidebar (L1) — đồng bộ 100% (engineer chốt S#19 Q2).
 const NAV: NavItem[] = [
   { label: "Home", href: "/" },
+  { label: "Exams", href: "/exams" },
   { label: "Analytics", href: "/me/dashboard" },
   { label: "History", href: "#" },
   // UGC v2.0 (Task 6.1): Import→Upload cho MỌI user; KHÔNG có mục admin.
@@ -68,8 +69,13 @@ export function SiteHeader({ user = null }: { user?: MenuUser | null }) {
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 className={[
-                  "font-sans text-xs font-medium tracking-[0.2em] whitespace-nowrap uppercase transition-colors active:text-[#A62C2B] max-sm:text-[10px] max-sm:tracking-[0.08em]",
-                  isActive ? "text-[#A62C2B]" : "text-[#EDE1C8]/55 hover:text-[#EDE1C8]",
+                  "relative font-sans text-xs font-medium tracking-[0.2em] whitespace-nowrap uppercase transition-colors max-sm:text-[10px] max-sm:tracking-[0.08em]",
+                  // Underline đỏ son: origin-center + scale-x nên "nở" ra hai bên
+                  // thay vì kéo từ một cạnh — hover/active(click)/isActive đều mở.
+                  "after:absolute after:-bottom-1.5 after:left-1/2 after:h-[2px] after:w-full after:origin-center after:-translate-x-1/2 after:scale-x-0 after:bg-[#A62C2B] after:transition-transform after:duration-300 after:content-['']",
+                  isActive
+                    ? "text-[#A62C2B] after:scale-x-100"
+                    : "text-[#EDE1C8]/55 hover:text-[#EDE1C8] hover:after:scale-x-100 active:text-[#A62C2B] active:after:scale-x-100",
                 ].join(" ")}
               >
                 {item.label}

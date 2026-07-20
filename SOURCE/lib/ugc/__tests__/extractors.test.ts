@@ -3,7 +3,7 @@
 // Chạy extractor thật với file thật thuộc pilot integration check (metric 3),
 // KHÔNG nằm trong unit suite này.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // gemini.ts import "server-only" (throw ngoài môi trường server Next) → stub.
 vi.mock("server-only", () => ({}));
@@ -20,6 +20,7 @@ process.env.GEMINI_API_KEY = "test-key-not-real";
 
 import { extractQuestions, mapQuestionsPayload } from "../extractQuestions";
 import { extractAnswers, mapAnswersPayload } from "../extractAnswers";
+import { FATAL_CALL_DEADLINE_MS } from "../gemini";
 import type { FileRef } from "../fileRef";
 
 const PNG_FILE: FileRef = {
@@ -212,6 +213,83 @@ describe("extractAnswers — mapping từ structured output", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors[0].code).toBe("EXTRACTION_FAILED");
+  });
+});
+
+// Hồi quy recipe-diagnose 2026-07: mỗi lối thoát của extractor phải phát MỘT
+// log chẩn đoán SERVER-SIDE riêng biệt (chống re-masking) mà mã user vẫn generic.
+describe("extractQuestions — khả năng chẩn đoán (server log riêng theo lối thoát)", () => {
+  let errSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errSpy.mockRestore();
+  });
+
+  it("catch: lỗi SDK throw → log 'extractQuestions:catch' + vẫn EXTRACTION_FAILED", async () => {
+    generateContentMock.mockRejectedValue(
+      Object.assign(new Error("RESOURCE_EXHAUSTED"), { status: 429 }),
+    );
+    const result = await extractQuestions(PNG_FILE);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0].code).toBe("EXTRACTION_FAILED");
+    expect(errSpy).toHaveBeenCalledWith("[ugc-extract] extractQuestions:catch", expect.any(String));
+    // status 429 phải xuất hiện trong detail để Step-2 phân biệt FP3/FP4.
+    const logged = errSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "[ugc-extract] extractQuestions:catch",
+    );
+    expect(String(logged?.[1])).toContain("429");
+  });
+
+  it("finishReason: non-STOP → log 'extractQuestions:finishReason' (phân biệt MAX_TOKENS)", async () => {
+    generateContentMock.mockResolvedValue(
+      questionsMessage({ parts: [], questions: [] }, "MAX_TOKENS"),
+    );
+    const result = await extractQuestions(PNG_FILE);
+    expect(result.ok).toBe(false);
+    expect(errSpy).toHaveBeenCalledWith(
+      "[ugc-extract] extractQuestions:finishReason",
+      expect.stringContaining("MAX_TOKENS"),
+    );
+  });
+
+  it("mapNull: payload sai contract → log 'extractQuestions:mapNull' (prefix ≤200, không full payload)", async () => {
+    generateContentMock.mockResolvedValue(
+      questionsMessage({ parts: [], questions: [{ part: 1, number: "một", type: "mcq" }] }),
+    );
+    await extractQuestions(PNG_FILE);
+    expect(errSpy).toHaveBeenCalledWith(
+      "[ugc-extract] extractQuestions:mapNull",
+      expect.any(String),
+    );
+  });
+
+  it("deadline: call treo quá FATAL_CALL_DEADLINE_MS → abort, log 'extractQuestions:deadline'", async () => {
+    vi.useFakeTimers();
+    try {
+      generateContentMock.mockImplementation(
+        ({ config }: { config: { abortSignal?: AbortSignal } }) =>
+          new Promise((_resolve, reject) => {
+            config.abortSignal?.addEventListener("abort", () => {
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+          }),
+      );
+      const pending = extractQuestions(PNG_FILE);
+      await vi.advanceTimersByTimeAsync(FATAL_CALL_DEADLINE_MS + 10);
+      const result = await pending;
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.errors[0].code).toBe("EXTRACTION_FAILED");
+      expect(errSpy).toHaveBeenCalledWith(
+        "[ugc-extract] extractQuestions:deadline",
+        expect.any(String),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

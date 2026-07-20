@@ -218,10 +218,78 @@ flowchart TB
 - [ ] Old-format exams byte-identical behavior (fixtures + manual) — *unit fixtures green; manual old-format e2e pending*
 - [x] `tsc`/ESLint/vitest/build clean; no-bundle check PASS — 2026-07-18 (102 tests)
 
+# v2.2 Extension — AI Metadata Intake in the Upload Loop (2026-07-20)
+
+Decomposes Design Doc §v2.2 Amendment (ADR-0007) into single-commit tasks. Scope: PRD R22–R25 / AC-034–AC-040.
+
+**Estimated impact**: ~12 files (≈8 existing edited, ≈4 new). No schema change, no new screen, no new dependency.
+
+**Precondition**: v2.1 Phases A–E complete. v2.2 touches the metadata path only and must leave the question/answer path byte-identical, so it can proceed once v2.1's assembly fixtures are green — it does not wait on v2.1's outstanding real-file QA items.
+
+## v2.2 Verification gates
+
+- **Gate A — not required on schema grounds.** v2.2 adds no DDL and no RLS change. Re-run `npx tsx supabase/test-rls.ts` once at QA by standing convention, but it does not gate any task.
+- **Gate E (normalization is total)**: `normalizeMeta` unit fixtures prove every out-of-range input degrades to `null` **and is never clamped**, every semester spelling maps or nulls, and author-typed values always beat extracted ones. Blocks the persistence task — nothing may write AI-derived metadata to a column before this is green.
+- **Gate F (publish gate holds server-side)**: `publishExam` refuses a metadata-incomplete exam **when called directly**, not merely when the button is disabled. Blocks the UI tasks — the guard must exist before the UI relies on it.
+- **Gate G (no fabrication, ADR-0007 kill criterion)**: on the real-file set (2025 Toán + ≥2 school-format term papers), `subject`/`grade`/`durationMinutes` read correctly on a majority and **zero fabricated values** appear for fields absent from the page. A fabrication failure blocks launch of Automatic-as-default; tighten the prompt's null-discipline rather than expanding scope.
+
+## v2.2 Phases
+
+```mermaid
+flowchart TB
+  A["Phase A: Contract — types + normalizeMeta (Gate E)"]
+  B["Phase B: Extractor — extractMeta (cheap model, page 1)"]
+  C["Phase C: Pipeline + publish gate (Gate F)"]
+  D["Phase D: UI — Entry Mode, S-01 optional metadata, S-03 editable block"]
+  E["Phase E: QA — real files (Gate G) + regression"]
+  A --> B
+  A --> C
+  B --> C
+  C --> D
+  D --> E
+```
+
+### Phase A — Contract (pure, no I/O)
+- **Task M1 — Types + error codes + limits.** `ExtractedMeta` (all fields nullable), `Semester`, server-side `EntryMode`; `META_INCOMPLETE`/`META_INVALID`/`META_EXTRACTION_FAILED` on `UgcErrorCode`; optional `field` on `UgcError`; `errorCopy` entries for the three codes. No behaviour change yet — types and copy only.
+- **Task M2 — `normalizeMeta.ts` + fixtures (GATE E).** The pure AI→DB boundary: per-field range rules degrading to `null`, semester spelling map, `"2024 – 2025"` → `2024`, TRƯỜNG-over-SỞ school preference, title composition + filename fallback, typed-beats-extracted precedence, truncation to every `limits.ts` bound. **Explicitly assert non-clamping** — a test that a duration of `900` becomes `null` and not `600`.
+
+### Phase B — Extractor
+- **Task M3 — `extractMeta.ts` + mapper tests.** `gemini-3.1-flash-lite`, question file **page 1 only** (reuse the existing `pdf.ts` slice helper), `responseJsonSchema` = `ExtractedMeta`, prompt anchored on the conventional Vietnamese header lines with explicit null-discipline. Mocked-SDK tests: mapped payload, all-null payload, malformed payload → `META_EXTRACTION_FAILED`. Add the module to the server-only import discipline and the no-bundle-check markers.
+
+### Phase C — Pipeline + gate
+- **Task M4 — `extractAndAssemble` branch + parallel call.** `entryMode` reaches the server; file validation always, `validateExamMeta` only in Manual; `Promise.all` of the three extractors; `normalizeMeta` → `UPDATE exams`; provisional filename title on insert; `extractMeta` failure logged and **swallowed** (non-fatal). One `pipelineLog` step marker added (8 → 9).
+- **Task M5 — `publishExam` metadata precondition (GATE F).** Required-field validity as a precondition; `META_INCOMPLETE` with `field` in the failure payload. Tested by calling the action directly with an incomplete exam.
+
+### Phase D — UI
+- **Task M6 — EntryModeField becomes functional + S-01 metadata optional.** Mode drives required-ness, the `*`/`aria-required` markers, the disclosure collapse, and the ExtractBar disabled-reason; typed values survive a mode switch and are never overwritten; Manual note copy corrected.
+- **Task M7 — S-03 editable metadata block + "from your file" marker.** `MetadataFields` reused on the review screen replacing the read-only summary; `muted` informational marker with `aria-describedby`, cleared on edit (session-derived provenance per O-7); metadata items in `ExtractionErrorPanel` sorted above per-question items and linking to the block; `ExtractionProgress` copy gains the metadata label.
+
+### Phase E — QA
+- **Task M8 — Real-file check (GATE G) + regression sweep.** Real-file metadata accuracy and the zero-fabrication assertion; AC-034…040 walked end-to-end; Manual-mode path re-verified unchanged (AC-036); all v2.1 assembly fixtures green byte-for-byte; `tsc`/ESLint/vitest/build clean; no-bundle check PASS; RLS suite re-run by convention; axe pass on the changed S-01/S-03 surfaces.
+
+## v2.2 Completion Criteria
+
+- [x] **Gate E** (normalization is total, non-clamping) — `normalizeMeta.test.ts` green 2026-07-20; asserts duration 900 → sentinel not 600, grade 13 → sentinel not 12
+- [x] **Gate F** (publish gate holds server-side) — `publishExam` prepends `validateMetaForPublish`; `saveExam` refuses to leave a published exam incomplete
+- [ ] **Gate G** (zero fabrication on real files) — **NOT RUN**: requires a live `GEMINI_API_KEY` and the real fixture files; unit suite mocks the SDK boundary by design
+- [x] Tasks M1–M7 implemented
+- [ ] AC-034…AC-041 satisfied — unit-level yes; **end-to-end unverified** (see build blocker below)
+- [x] Manual mode path preserved (`entryMode !== "automatic"` keeps `validateExamMeta` before any AI call; missing `entryMode` defaults to manual so an older client cannot silently skip the gate)
+- [ ] `extractMeta` failure still yields the full question list (AC-040) — **fault injection not run**; the non-fatal path is unit-covered in `extractMeta.test.ts` but not exercised through the real pipeline
+- [x] v2.1 + v2.0 fixtures unchanged — full suite **137/137 green** (102 pre-existing + 35 new)
+- [x] `tsc --noEmit` clean on all changed files; ESLint clean on all 18 changed files
+- [ ] `next build` — **BLOCKED, unrelated to v2.2**: eight files under `SOURCE/app/(layer1)/` are NTFS-corrupted (`os error 1392`, "The file or directory is corrupted and unreadable"). Turbopack aborts on `HomeSidebar.tsx`. Git still has every blob, so recovery is `git checkout` after the corrupted entries are removed — but removal needs `chkdsk`/elevated intervention and is a decision for the engineer, not a build step.
+- [ ] no-bundle check — **PASS is not trustworthy**: `scripts/check-ai-key-bundle.mjs` scanned the stale `.next-build/` from 2026-07-18 (a fresh build cannot run). Re-run after the build is unblocked; `extractMeta.ts` imports `gemini.ts`, which carries `import "server-only"`, so the compile-time guard does hold.
+
+### Known blocker (filesystem, pre-existing)
+
+`SOURCE/app/(layer1)/{actions.ts, login/page.tsx, reset-password/page.tsx, _components/{AuthForm,HomeSidebar,HomeStage,ResetPasswordForm,SidebarProfile}.tsx}` cannot be opened by any tool (Node, PowerShell, git, icacls, Turbopack) — the NTFS entries are damaged. They are listed by directory enumeration but every `open()` returns error 1392. This predates v2.2 and touches no file this work changed. Consequences: `next build`, full-project ESLint, and any end-to-end verification are unavailable until the volume is repaired.
+
 ## Update History
 
 | Date | Version | Changes | Author |
 |------|---------|---------|--------|
 | 2026-07-14 | 1.1 | Initial plan from the v1.1 chain (paste + admin) — 7 phases, tasks 1.1…7 | plan agent (Claude Opus 4.8) |
 | 2026-07-15 | 2.0 | **Major redesign to the v2.0 chain**: DB/Storage foundation without admin; AI extraction + assembly + crop; render safety + QuestionFigure; server actions (extract/save/publish/delete/report); screens S-01…S-03 (no admin screens); obsoleted the deterministic parser tasks; carried over the vitest tooling | Claude (Opus 4.8) |
+| 2026-07-20 | 2.2 | **v2.2 Extension**: AI metadata intake (ADR-0007) — 8 tasks in 5 phases (contract/normalizeMeta, extractMeta, pipeline + publish gate, UI, QA); gates E (normalization is total, non-clamping), F (publish gate holds server-side), G (zero fabrication on real files); no schema change, no new screen | Claude (Opus 4.8) |
 | 2026-07-17 | 2.1 | **v2.1 extension**: multi-part national format (ADR-0005) + Gemini native bbox protocol (ADR-0006) — phases A–E, tasks A1…E1, gates C/D | Claude (Fable 5) |

@@ -24,10 +24,9 @@ import { makeUgcError } from "./errorCopy";
 import type { PipelineLogger } from "./pipelineLog";
 import type { BoundingBox, ExtractedQuestion, Result, UgcError } from "./types";
 import type { FileRef } from "./fileRef";
+import { renderPdfPage } from "./pdf";
 
 const BUCKET = "exam-images";
-// Render PDF ở scale 2x để hình crop đủ nét.
-const PDF_RENDER_SCALE = 2;
 
 function clamp1000(v: number): number {
   return Math.min(1000, Math.max(0, v));
@@ -54,24 +53,6 @@ export function boxToPixels(
   px.height = Math.min(px.height, height - px.top);
   if (px.width < 1 || px.height < 1) return null;
   return px;
-}
-
-/** Render một trang PDF (1-based) thành PNG bytes bằng mupdf (WASM). */
-async function renderPdfPage(pdfBytes: Uint8Array, page1Based: number): Promise<Uint8Array> {
-  const mupdf = await import("mupdf");
-  const doc = mupdf.Document.openDocument(Buffer.from(pdfBytes), "application/pdf");
-  const pageIndex = page1Based - 1;
-  if (pageIndex < 0 || pageIndex >= doc.countPages()) {
-    throw new Error(`PDF không có trang ${page1Based}`);
-  }
-  const page = doc.loadPage(pageIndex);
-  const pixmap = page.toPixmap(
-    mupdf.Matrix.scale(PDF_RENDER_SCALE, PDF_RENDER_SCALE),
-    mupdf.ColorSpace.DeviceRGB,
-    false,
-    true
-  );
-  return pixmap.asPNG();
 }
 
 /** Crop 1 hình theo bbox từ file nguồn (PDF hoặc ảnh) → PNG buffer. */

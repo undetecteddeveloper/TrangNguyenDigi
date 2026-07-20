@@ -21,6 +21,14 @@ export const ANSWER_MODEL = "gemini-3.1-flash-lite";
 
 let client: GoogleGenAI | null = null;
 
+// Số lần GỌI tối đa (kể cả lần đầu) cho mỗi call — SDK tự retry 408/429/500/
+// 502/503/504 với exponential backoff (p-retry) KHI có httpOptions.retryOptions.
+// Sự cố 2026-07: gemini-3.5-flash trả 503 "high demand… try again later" (quá
+// tải tạm thời, retryable). SDK có sẵn cơ chế này nhưng TẮT mặc định; client
+// { apiKey } trơn = không retry ⇒ một cú 503 thoáng qua làm rollback cả pipeline.
+// Bật lên = 3 lần gọi (2 lần thử lại) để vượt qua spike ngắn.
+const RETRY_ATTEMPTS = 3;
+
 /** Singleton — key đọc từ server env, không bao giờ gửi xuống client. */
 export function getGeminiClient(): GoogleGenAI {
   if (!client) {
@@ -28,7 +36,65 @@ export function getGeminiClient(): GoogleGenAI {
       // Fail loudly (log server) — caller map thành EXTRACTION_FAILED cho user.
       throw new Error("GEMINI_API_KEY chưa được cấu hình trong server env");
     }
-    client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    client = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { retryOptions: { attempts: RETRY_ATTEMPTS } },
+    });
   }
   return client;
+}
+
+// --- Chẩn đoán extractor (recipe-diagnose 2026-07) --------------------------
+// Sự cố: extractQuestions FAIL với mã generic EXTRACTION_FAILED và KHÔNG có
+// thông tin nào để chẩn đoán, vì cả 4 lối thoát của extractor (finishReason,
+// text rỗng, payload sai contract, catch) đều nuốt lỗi thật (MAX_TOKENS vs
+// 429/quota vs 404 model vs timeout). Các helper dưới khôi phục khả năng chẩn
+// đoán SERVER-SIDE mà KHÔNG đổi message user-facing và KHÔNG log raw payload.
+
+/**
+ * Log chẩn đoán server-only cho một lối thoát của extractor.
+ * CHỈ log metadata an toàn (finishReason/status/usage…) — KHÔNG BAO GIỜ log
+ * full AI payload (nội dung đề là dữ liệu người dùng). Bọc try/catch để một
+ * error shape lạ không bao giờ khiến chính câu log ném ra.
+ */
+export function logExtractorExit(site: string, detail: Record<string, unknown>): void {
+  try {
+    console.error(`[ugc-extract] ${site}`, JSON.stringify(detail));
+  } catch {
+    console.error(`[ugc-extract] ${site}`, detail);
+  }
+}
+
+/** Trích field an toàn từ error SDK (shape đổi giữa các version @google/genai). */
+export function sdkErrorDetail(err: unknown): Record<string, unknown> {
+  const e = err as Record<string, unknown> | null | undefined;
+  return {
+    name: e?.name,
+    status: e?.status,
+    code: e?.code,
+    message: e?.message,
+    cause: e?.cause,
+  };
+}
+
+/**
+ * Deadline (ms) TỔNG cho mỗi call FATAL (extractQuestions/extractAnswers) —
+ * bao trùm cả chuỗi retry của SDK (abortSignal truyền vào fetch dùng chung mọi
+ * lần thử). Đặt ĐỦ RỘNG để 3 lần gọi + backoff chạy xong (~24s ước tính từ
+ * elapsedMs 7.5s/attempt), nhưng vẫn CHẶN một call treo vô hạn (fetch của SDK
+ * không có timeout mặc định; httpOptions.timeout thì lỗi — js-genai #1277 —
+ * nên phải dùng AbortController). extractMeta NON-FATAL (AC-040) cố tình KHÔNG
+ * dùng deadline; retry-exhaustion tự bó nó lại.
+ */
+export const FATAL_CALL_DEADLINE_MS = 30_000;
+
+/**
+ * Tạo AbortSignal tự abort sau `ms`. Trả kèm `clear()` để hủy timer trong
+ * finally (tránh giữ event loop khi call thành công sớm). Call bị abort → SDK
+ * ném error với name === "AbortError".
+ */
+export function makeDeadlineSignal(ms: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
 }

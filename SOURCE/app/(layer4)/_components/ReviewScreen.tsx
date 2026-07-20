@@ -1,34 +1,54 @@
 "use client";
 
-// ReviewScreen — container S-03 review & edit (UI Spec §ReviewScreen / Task 6.4).
-// Giữ bản sao AssembledExam sửa được; validate LIVE bằng validateAssembledExam
-// (thuần, client-safe) để bật/tắt Publish + đổ ExtractionErrorPanel. Save →
-// saveExam (persist nháp/đề published). Publish → save trước rồi publishExam.
+// ReviewScreen — container S-03 review & edit (UI Spec §ReviewScreen / Task 6.4
+// + v2.2 M7). Giữ bản sao AssembledExam sửa được; validate LIVE bằng
+// validateAssembledExam + validateMetaForPublish (thuần, client-safe) để
+// bật/tắt Publish + đổ ExtractionErrorPanel. Save → saveExam (persist nháp/đề
+// published). Publish → save trước rồi publishExam (server tự gate lại — nút
+// disable chỉ là UX).
+//
+// v2.2 (ADR-0007):
+//   - Khối metadata SỬA ĐƯỢC (MetadataFields) thay summary read-only; subject/
+//     grade sửa được khi CHƯA publish (server cascade topic).
+//   - Marker "from your file" trên field AI điền chưa chạm — session-derived
+//     từ ?src=auto (O-7/TBD-07: reload mất marker là chủ đích); sửa field nào
+//     marker field đó biến mất.
+//   - Lỗi META_* sort TRƯỚC lỗi từng câu, link tới #exam-details.
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { saveExam, publishExam } from "@/app/(layer4)/actions";
 import { validateAssembledExam } from "@/lib/ugc/assembleExam";
-import type { AssembledExam, AssembledQuestion, SaveExamPatch } from "@/lib/ugc/types";
+import { validateMetaForPublish } from "@/lib/ugc/normalizeMeta";
+import type {
+  AssembledExam,
+  AssembledQuestion,
+  MetaFieldName,
+  SaveExamPatch,
+} from "@/lib/ugc/types";
 import { StatusBadge } from "./StatusBadge";
 import { ExtractionErrorPanel } from "./ExtractionErrorPanel";
 import { AssembledQuestionList } from "./AssembledQuestionList";
+import { MetadataFields, type ExamMetaFormValue } from "./MetadataFields";
 import { PublishBar } from "./PublishBar";
 
 interface ReviewScreenProps {
   examId: string;
   status: string;
   initialExam: AssembledExam;
+  /** v2.2: phiên đến từ extract Automatic (?src=auto) — bật marker AI. */
+  srcAuto?: boolean;
 }
 
-/** State → SaveExamPatch (subject/grade cố định — không gửi).
- * v2.1: id composite `p{part}q{n}` (khớp id do extractAndAssemble tạo);
- * true_false gửi subItems + subAnswers; short_answer dùng essayAnswer. */
-function toPatch(examId: string, exam: AssembledExam): SaveExamPatch {
+/** State → SaveExamPatch. v2.2: subject/grade gửi kèm khi CHƯA publish (server
+ * từ chối nếu đề đã publish). id composite `p{part}q{n}`; true_false gửi
+ * subItems + subAnswers; short_answer dùng essayAnswer. */
+function toPatch(examId: string, exam: AssembledExam, isPublished: boolean): SaveExamPatch {
   return {
     meta: {
       title: exam.meta.title,
+      ...(!isPublished && { subject: exam.meta.subject, grade: exam.meta.grade }),
       durationMinutes: exam.meta.durationMinutes,
       school: exam.meta.school ?? null,
       schoolYear: exam.meta.schoolYear ?? null,
@@ -47,16 +67,56 @@ function toPatch(examId: string, exam: AssembledExam): SaveExamPatch {
   };
 }
 
-export function ReviewScreen({ examId, status: initialStatus, initialExam }: ReviewScreenProps) {
+/** ExamMeta (sentinel ""/0) → giá trị form chuỗi (sentinel → ""). */
+function toFormValue(exam: AssembledExam): ExamMetaFormValue {
+  const m = exam.meta;
+  return {
+    title: m.title,
+    subject: m.subject,
+    grade: m.grade === 0 ? "" : String(m.grade),
+    durationMinutes: m.durationMinutes === 0 ? "" : String(m.durationMinutes),
+    school: m.school ?? "",
+    schoolYear: m.schoolYear === undefined ? "" : String(m.schoolYear),
+    semester: m.semester ?? "",
+  };
+}
+
+const META_FIELDS: MetaFieldName[] = [
+  "title",
+  "subject",
+  "grade",
+  "durationMinutes",
+  "school",
+  "schoolYear",
+  "semester",
+];
+
+export function ReviewScreen({
+  examId,
+  status: initialStatus,
+  initialExam,
+  srcAuto,
+}: ReviewScreenProps) {
   const [exam, setExam] = useState<AssembledExam>(initialExam);
   const [status, setStatus] = useState(initialStatus);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string> | undefined>(undefined);
+  // Marker "from your file": field có giá trị khi đến từ Automatic, chưa chạm.
+  const [aiFilled, setAiFilled] = useState<ReadonlySet<MetaFieldName>>(() => {
+    if (!srcAuto) return new Set();
+    const v = toFormValue(initialExam);
+    return new Set(META_FIELDS.filter((f) => v[f] !== ""));
+  });
   const router = useRouter();
 
-  const errors = validateAssembledExam(exam);
+  // v2.2: lỗi metadata sort TRƯỚC lỗi câu hỏi (gate toàn đề); status
+  // review/failed chỉ theo lỗi CÂU HỎI (metadata thiếu vẫn là 'review').
+  const questionErrors = validateAssembledExam(exam);
+  const metaErrors = validateMetaForPublish(exam.meta);
+  const errors = [...metaErrors, ...questionErrors];
   const isPublished = status === "published";
   const canPublish = errors.length === 0;
 
@@ -71,18 +131,55 @@ export function ReviewScreen({ examId, status: initialStatus, initialExam }: Rev
     }));
   }
 
+  /** Sửa metadata: parse chuỗi form → ExamMeta (rỗng/không hợp lệ → sentinel
+   * ""/0 — server cùng quy ước); field vừa chạm mất marker AI. */
+  function onChangeMeta(patch: Partial<ExamMetaFormValue>) {
+    setDirty(true);
+    if (aiFilled.size > 0) {
+      const next = new Set(aiFilled);
+      for (const key of Object.keys(patch) as MetaFieldName[]) next.delete(key);
+      setAiFilled(next);
+    }
+    setExam((prev) => {
+      const meta = { ...prev.meta };
+      if (patch.title !== undefined) meta.title = patch.title;
+      if (patch.subject !== undefined) meta.subject = patch.subject;
+      if (patch.grade !== undefined) {
+        const g = Number.parseInt(patch.grade, 10);
+        meta.grade = Number.isInteger(g) && g > 0 ? g : 0;
+      }
+      if (patch.durationMinutes !== undefined) {
+        const d = Number.parseInt(patch.durationMinutes, 10);
+        meta.durationMinutes = Number.isInteger(d) && d > 0 ? d : 0;
+      }
+      if (patch.school !== undefined) meta.school = patch.school.trim() === "" ? undefined : patch.school;
+      if (patch.schoolYear !== undefined) {
+        const y = Number.parseInt(patch.schoolYear, 10);
+        meta.schoolYear = Number.isInteger(y) ? y : undefined;
+      }
+      if (patch.semester !== undefined) {
+        meta.semester =
+          patch.semester === "HK1" || patch.semester === "HK2" ? patch.semester : undefined;
+      }
+      return { ...prev, meta };
+    });
+  }
+
   async function persist(): Promise<boolean> {
     setSaving(true);
     setError(null);
-    const result = await saveExam(examId, toPatch(examId, exam));
+    const result = await saveExam(examId, toPatch(examId, exam, isPublished));
     setSaving(false);
     if (result.error) {
       setError(result.error.message);
+      setFieldErrors(result.error.fieldErrors);
       return false;
     }
+    setFieldErrors(undefined);
     setDirty(false);
-    // Đề chưa published: status có thể đổi review↔failed theo validate.
-    if (!isPublished) setStatus(errors.length > 0 ? "failed" : "review");
+    // Đề chưa published: status đổi review↔failed CHỈ theo lỗi câu hỏi —
+    // metadata thiếu vẫn là 'review' (gate nằm ở publish, ADR-0007).
+    if (!isPublished) setStatus(questionErrors.length > 0 ? "failed" : "review");
     router.refresh();
     return true;
   }
@@ -91,11 +188,12 @@ export function ReviewScreen({ examId, status: initialStatus, initialExam }: Rev
     if (!canPublish) return;
     setPublishing(true);
     setError(null);
-    // Lưu chỉnh sửa trước (publishExam validate từ DB).
-    const saved = await saveExam(examId, toPatch(examId, exam));
+    // Lưu chỉnh sửa trước (publishExam validate từ DB — gate server là thật).
+    const saved = await saveExam(examId, toPatch(examId, exam, isPublished));
     if (saved.error) {
       setPublishing(false);
       setError(saved.error.message);
+      setFieldErrors(saved.error.fieldErrors);
       return;
     }
     const result = await publishExam(examId);
@@ -118,13 +216,13 @@ export function ReviewScreen({ examId, status: initialStatus, initialExam }: Rev
           ← My exams
         </Link>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-foreground text-2xl">{exam.meta.title}</h1>
+          <h1 className="text-foreground text-2xl">
+            {exam.meta.title.trim() === "" ? "Untitled exam" : exam.meta.title}
+          </h1>
           <StatusBadge status={status} />
         </div>
         <p className="text-muted-foreground mt-1 text-sm">
-          {exam.meta.subject} · Grade {exam.meta.grade} · {exam.meta.durationMinutes} min ·{" "}
-          {exam.questions.length} question
-          {exam.questions.length === 1 ? "" : "s"}
+          {exam.questions.length} question{exam.questions.length === 1 ? "" : "s"}
         </p>
         {isPublished && (
           <p className="text-muted-foreground mt-2 text-sm">
@@ -134,6 +232,23 @@ export function ReviewScreen({ examId, status: initialStatus, initialExam }: Rev
       </div>
 
       <ExtractionErrorPanel errors={errors} />
+
+      {/* v2.2: khối metadata sửa được — anchor cho link lỗi META_*. */}
+      <section id="exam-details" className="rounded-[4px] border border-border p-4">
+        <h2 className="mb-4 text-sm font-medium text-foreground">Exam details</h2>
+        <MetadataFields
+          value={toFormValue(exam)}
+          onChange={onChangeMeta}
+          fieldErrors={fieldErrors}
+          disabled={saving || publishing}
+          aiFilled={aiFilled}
+        />
+        {isPublished && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Subject and grade are fixed after publishing.
+          </p>
+        )}
+      </section>
 
       <AssembledQuestionList
         questions={exam.questions}

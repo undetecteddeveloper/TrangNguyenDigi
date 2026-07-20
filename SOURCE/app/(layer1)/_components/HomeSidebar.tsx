@@ -17,6 +17,7 @@ type NavItem = { label: string; href: string };
 
 const NAV: NavItem[] = [
   { label: "Home", href: "/" },
+  { label: "Exams", href: "/exams" },
   { label: "Analytics", href: "/me/dashboard" },
   { label: "History", href: "#" },
   // UGC v2.0 (Task 6.1): Import→Upload cho MỌI user; KHÔNG có mục admin.

@@ -7,7 +7,14 @@
 // trị (PHẦN III). Lỗi AI/schema → EXTRACTION_FAILED. Không log raw AI payload.
 
 import { makeUgcError } from "./errorCopy";
-import { ANSWER_MODEL, getGeminiClient } from "./gemini";
+import {
+  ANSWER_MODEL,
+  FATAL_CALL_DEADLINE_MS,
+  getGeminiClient,
+  logExtractorExit,
+  makeDeadlineSignal,
+  sdkErrorDetail,
+} from "./gemini";
 import type { ChoiceId, ExtractedAnswer, Result, SubItemId } from "./types";
 import type { FileRef } from "./fileRef";
 import { toGeminiPart } from "./fileRef";
@@ -149,12 +156,15 @@ export function mapAnswersPayload(payload: unknown): ExtractedAnswer[] | null {
 export async function extractAnswers(
   file: FileRef,
 ): Promise<Result<ExtractedAnswer[]>> {
+  const startedAt = Date.now();
+  const deadline = makeDeadlineSignal(FATAL_CALL_DEADLINE_MS);
   try {
     const client = getGeminiClient();
     const response = await client.models.generateContent({
       model: ANSWER_MODEL,
       contents: [toGeminiPart(file), { text: PROMPT }],
       config: {
+        abortSignal: deadline.signal,
         maxOutputTokens: 16000,
         responseMimeType: "application/json",
         responseJsonSchema: ANSWERS_SCHEMA as unknown as Record<string, unknown>,
@@ -163,17 +173,44 @@ export async function extractAnswers(
 
     const finishReason = response.candidates?.[0]?.finishReason;
     if (finishReason !== "STOP") {
+      logExtractorExit("extractAnswers:finishReason", {
+        finishReason,
+        safetyRatings: response.candidates?.[0]?.safetyRatings,
+        blockReason: response.promptFeedback?.blockReason,
+        usage: response.usageMetadata,
+        elapsedMs: Date.now() - startedAt,
+      });
       return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
     }
     const text = response.text;
-    if (!text) return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
+    if (!text) {
+      logExtractorExit("extractAnswers:emptyText", {
+        finishReason,
+        blockReason: response.promptFeedback?.blockReason,
+        usage: response.usageMetadata,
+        elapsedMs: Date.now() - startedAt,
+      });
+      return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
+    }
 
     const answers = mapAnswersPayload(JSON.parse(text));
     if (!answers) {
+      logExtractorExit("extractAnswers:mapNull", {
+        textLength: text.length,
+        textPrefix: text.slice(0, 200),
+        elapsedMs: Date.now() - startedAt,
+      });
       return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
     }
     return { ok: true, value: answers };
-  } catch {
+  } catch (err) {
+    const isAbort = (err as { name?: string })?.name === "AbortError";
+    logExtractorExit(isAbort ? "extractAnswers:deadline" : "extractAnswers:catch", {
+      ...sdkErrorDetail(err),
+      elapsedMs: Date.now() - startedAt,
+    });
     return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
+  } finally {
+    deadline.clear();
   }
 }

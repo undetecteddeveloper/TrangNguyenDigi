@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 (v2.0 implemented; v2.1 amendment — see §v2.1 Amendment) |
-| **Date** | 2026-07-17 (v2.0: 2026-07-15) |
+| **Version** | 2.2 (v2.0 implemented; v2.1 + v2.2 amendments — see §v2.1 Amendment, §v2.2 Amendment) |
+| **Date** | 2026-07-20 (v2.1: 2026-07-17; v2.0: 2026-07-15) |
 | **Status** | Draft — major redesign. Supersedes v1.1 (plain-text paste + deterministic parser + single-admin moderation). Aligns to PRD v2.0, UI Spec v2.0, and the revised ADRs: **two-file upload → server-side AI extraction → code assembly → mandatory author review → author-gated publish**, with question images and **no admin**. |
 | **PRD** | `docs/prd/ugc-exam-upload-prd.md` (v2.0) |
 | **UI Spec** | `docs/ui-spec/ugc-exam-upload-ui-spec.md` (v2.0) |
@@ -878,6 +878,207 @@ Join key changes from `number` to the composite string `` `${part}:${number}` ``
 - Real-file check (QA task): 1 official 2025 Toán exam code + its answer page — all 22 questions land under correct (part, number); PHẦN II grids read correctly; >0 figures detected.
 - Gate A re-run after the schema delta (RLS unchanged in shape but re-verified by convention).
 
+## v2.2 Amendment — AI Metadata Intake in the Upload Loop (2026-07-20)
+
+Implements PRD R22–R25 / AC-034–AC-040 per **ADR-0007**. v2.1 is the baseline; this section specifies only the **delta**. Product decision: metadata is AI-filled with **no confirmation stop** — the author corrects it in the existing mandatory review, and required-field validity gates **publish**, not upload.
+
+### v2.2 Schema delta
+
+**None.** All seven metadata fields already exist on `public.exams` (`title`, `subject`, `grade`, `duration_minutes`, `school`, `school_year`, `semester`). v2.2 changes only *who writes them and when* — no DDL, no new column, no RLS change, and therefore **no Gate A re-run is required** on schema grounds.
+
+One consequence worth stating explicitly: an `exams` row may now exist in `processing`/`review` with a provisional title and null required fields. That is already permitted by the schema (only `status` carries a CHECK; the metadata columns have no NOT NULL beyond `title`, which always receives at least the filename-derived provisional value). Such rows are author-confined by `exams_select_visible` and unpublishable by the publish gate below, so nothing incomplete can reach the catalog.
+
+### v2.2 Types delta (`lib/ugc/types.ts`)
+
+```ts
+// Raw model output — EVERY field nullable. null means "not printed on the page",
+// never "unknown, guess something". The prompt forbids inference.
+export type ExtractedMeta = {
+  title: string | null;
+  subject: string | null;
+  grade: number | null;
+  durationMinutes: number | null;
+  school: string | null;
+  schoolYear: string | null;        // VERBATIM printed text, e.g. "2024 – 2025"
+  semester: string | null;          // VERBATIM printed text, e.g. "HỌC KÌ I"
+};
+
+export type EntryMode = "automatic" | "manual";   // moved from the component; now server-meaningful
+export type MetaFieldName = "title" | "subject" | "grade" | "durationMinutes"
+                          | "school" | "schoolYear" | "semester";
+```
+
+> **Implementation delta (2026-07-20).** Two shapes changed from this section's original draft, both to keep parsing out of the model:
+>
+> 1. **`schoolYear`/`semester` are `string | null`, not `number`/`Semester`.** The model transcribes what is printed (`"2024 – 2025"`, `"HỌC KÌ I"`); converting a printed range to a start year and a term spelling to an enum is deterministic string work, so it belongs in `normalizeMeta` where it is unit-testable — not in a non-deterministic call. Asking the model to compute invites exactly the silent-wrong-value failure this design is built to avoid.
+> 2. **Absent required values are a sentinel, not `null`.** `exams.title`/`subject`/`grade`/`duration_minutes` are `NOT NULL` in the existing schema, and v2.2 adds no DDL. So `normalizeMeta` returns `""` for a missing `subject` and `0` for a missing `grade`/`durationMinutes` (`META_SENTINEL`). The design intent is unchanged — an absent value stays visibly absent and is unpublishable — but the mechanism is a sentinel the publish gate rejects, not a null the column would refuse. Optional fields (`school`/`schoolYear`/`semester`) are genuinely nullable and use `undefined`.
+
+`UgcErrorCode` gains three codes:
+
+| Code | `questionNumber` | Meaning |
+|------|------------------|---------|
+| `META_INCOMPLETE` | `null` | A required field (title/subject/grade/durationMinutes) is empty after extraction + author edits |
+| `META_INVALID` | `null` | A field is present but outside its `limits.ts` bound (surfaced only for author-typed values; extracted values are normalized to `null` instead — see below) |
+| `META_EXTRACTION_FAILED` | `null` | The metadata call itself failed. **Non-fatal** — the run continues |
+
+`UgcError` gains an optional `field?: keyof ExtractedMeta` so the error panel can link an item to a specific input rather than to a question card.
+
+### v2.2 Extraction delta — new module `lib/ugc/extractMeta.ts`
+
+```yaml
+Contract: extractMeta(file: FileRef): Promise<Result<ExtractedMeta>>    # server-only, AI, cheap model
+  Model: gemini-3.1-flash-lite (same cheap model as extractAnswers; ADR-0006 model-id discipline applies)
+  Input: the QUESTION file, FIRST PAGE ONLY
+         - PDF  -> page 1, sliced with the existing pdf.ts helper (do not send the whole document)
+         - image -> the image as-is
+  Behavior: one call, structured output via responseJsonSchema = ExtractedMeta.
+            Reads ONLY the header block. MUST NOT read or count questions.
+            MUST return null for any field not printed on the page — the prompt states that
+            null is the correct and expected answer for an absent field, and that inventing a
+            school, year or duration is a failure. (ADR-0006 lesson: an easy null exit plus an
+            uncalibrated ask produced 0% detection; here null is the DESIRED output, so the
+            prompt must instead make clear that a printed value must not be skipped.)
+  Output: ok=true  => ExtractedMeta (any or all fields may be null)
+          ok=false => [{code:'META_EXTRACTION_FAILED', questionNumber:null, ...}]
+  NON-FATAL: the caller logs and continues. A metadata failure never aborts the upload (AC-040).
+```
+
+Prompt anchors, drawn from the conventional Vietnamese header shape:
+
+| Printed line | Field |
+|---|---|
+| `TRƯỜNG THPT …` (preferred) / `SỞ GD&ĐT …` (fallback) | `school` |
+| `ĐỀ KIỂM TRA …` / `ĐỀ THI …` | `title`, and `semester` when the line names a học kì |
+| `Môn: …` | `subject` |
+| `Lớp: …` / `– Lớp 12` | `grade` |
+| `Năm học: 2024 – 2025` | `schoolYear` (start year) |
+| `Thời gian làm bài: 90 phút` | `durationMinutes` |
+
+### v2.2 Normalization delta — new module `lib/ugc/normalizeMeta.ts` (PURE)
+
+The only path from model output to a database column. Mirrors `assembleExam`'s role for questions: **AI proposes, code decides.**
+
+```yaml
+Contract: normalizeMeta(raw: ExtractedMeta | null, typed: TypedMeta, fallbackTitle: string): ExamMeta
+                                                                                  # PURE, no I/O
+  Precedence: an author-typed value ALWAYS wins over an extracted value (the model never
+              overwrites something the human wrote — S-01 values survive a mode switch).
+  raw = null (extractMeta failed) is a normal input, not an error path (AC-040).
+  Per-field rules:
+    grade           : outside MIN_GRADE..MAX_GRADE       -> 0    (sentinel; never clamped)
+    durationMinutes : outside MIN_DURATION..MAX_DURATION -> 0    (sentinel; never clamped)
+    subject         : mapped through the SUBJECTS vocabulary (O-9); no match -> "" (sentinel)
+    schoolYear      : first 4-digit run of the printed text ("2024 – 2025" -> 2024);
+                      outside MIN_YEAR..MAX_YEAR -> undefined
+    semester        : "HỌC KÌ I"|"HK1"|"I" -> "HK1";  "HỌC KÌ II"|"HK2"|"II" -> "HK2";  else undefined
+    school          : trim; truncate to MAX_SCHOOL; empty -> undefined
+    title           : trim; truncate to MAX_TITLE. If absent, compose from present fields
+                      ("Đề kiểm tra Math lớp 12"); if nothing is present, fall back to the
+                      question filename stem (provisional title).
+  Guarantee: the returned ExamMeta can never violate a schema CHECK or a limits.ts bound.
+             Out-of-range degrades to a sentinel (-> META_INCOMPLETE at publish), never to a bad write.
+
+Contract: validateMetaForPublish(meta: ExamMeta): UgcError[]                       # PURE
+  sentinel/empty required field -> META_INCOMPLETE(field)
+  present-but-out-of-range      -> META_INVALID(field)   # only reachable for author-typed values,
+                                                         # since extracted out-of-range became sentinel
+  Empty result <=> metadata is publishable. Called by publishExam (server, authoritative)
+  and by ReviewScreen (client, for early display + PublishBar state).
+```
+
+**Subject vocabulary (`lib/ugc/subjects.ts`) — O-9 resolved.** `subject` is normalized to a fixed canonical list rather than stored as printed. Canonical values stay in English (`Math`/`Physics`/`Chemistry`/…) to match the existing seeded rows, so the catalog's subject facet does not fragment into `Toán`/`Toan`/`TOÁN`/`Math` variants. `normalizeSubject` folds Vietnamese diacritics, strips a leading `"Môn:"`/`"Môn thi:"`, and matches an alias table (`toan`→`Math`, `vat ly`/`vat li`→`Physics`, `gdcd`→`Civic Education`, …); **no match yields `null` → the sentinel**, never a guess. The S-01/S-03 field is therefore a `<select>` over `SUBJECTS` (Vietnamese labels, canonical values), not a free-text input.
+
+Clamping is deliberately rejected: a duration read as `900` clamped to `600` produces a plausible wrong value that survives review unnoticed, whereas `null` renders as a visibly empty required field. This is the same asymmetry that makes fabrication a hard-fail in the ADR-0007 kill criterion.
+
+### v2.2 Pipeline delta (`(layer4)/actions.ts` — `extractAndAssemble`)
+
+The three AI calls are mutually independent and all read files that are already uploaded, so metadata extraction is **parallel, not sequential** — it adds no wall-clock latency.
+
+```
+validate: files ALWAYS (mime/size/pages, limits.ts) — the cost guard, unchanged
+          metadata ONLY IF entryMode === 'manual'  (validateExamMeta, v2.1 behaviour)
+INSERT exams(status='processing', title = typed title ?? <question filename stem>, author_id, …)
+upload both files -> exam-uploads/{examId}/…
+  Promise.all([
+    extractMeta(questionFile),        # NEW — cheap model, page 1, non-fatal
+    extractQuestions(questionFile),   # unchanged
+    extractAnswers(answerFile),       # unchanged
+  ])
+IF entryMode === 'automatic':
+    meta := normalizeMeta(extractMeta result ?? all-null, typedValues)
+    UPDATE exams SET title/subject/grade/duration_minutes/school/school_year/semester = meta
+cropImages -> assembleExam -> INSERT questions          # unchanged
+status := 'review' | 'failed'                            # unchanged
+redirect /me/exams/[id]
+```
+
+`ExtractionProgress` copy gains "Reading your exam details…" as a label inside the existing single progress state (UI Spec §v2.2); `pipelineLog.ts` gains one step marker, moving the step count from 8 to 9.
+
+> **Why parallel and not "meta first":** a sequential meta-then-questions ordering would only be required if metadata gated the later calls. It does not — the product decision removed the confirmation stop, so nothing downstream consumes the metadata result. Sequencing would buy nothing and cost a round-trip.
+
+### v2.2 Publish-gate delta (`publishExam`) — the load-bearing change
+
+`publishExam(examId)` gains a metadata precondition beside its existing assembly-cleanliness precondition:
+
+```yaml
+Contract: publishExam(examId): Promise<{error?}>
+  Preconditions (ALL must hold):
+    - own exam (RLS + explicit check)                                     # unchanged
+    - status in ('review','draft')                                        # unchanged
+    - assembly/validation clean                                           # unchanged
+    - NEW: required metadata valid — title, subject, grade, durationMinutes
+           all present and within limits.ts bounds
+  On the new failure: { error: { kind: "validation", errors: [ {code:'META_INCOMPLETE', field, …} ] } }
+```
+
+Server-side enforcement is required, not merely a disabled button: `PublishBar` being disabled is UI, and per the project's standing rule ("DB + Storage enforcement mandatory; UI hiding is never the guard") the action must refuse independently. This is an app-layer gate rather than a DB CHECK because publishing is a status transition the app owns — v2.0 deliberately declined a transition trigger (§Schema note), and that decision stands.
+
+`saveExam(examId, patch)` is the mechanism by which the author clears a `META_INCOMPLETE`. It did need a contract change after all:
+
+> **Implementation delta — `saveExam` gains `subject`/`grade` (pre-publish only).** v2.0 fixed `subject`/`grade` at creation because changing `subject` desynchronizes every question's `topic` (ADR-0004 sets `topic := subject`). That rule assumed the author *typed* those fields, so they were right by construction. Under Automatic they may be sentinel — the model could not read them — and if they stayed immutable the exam would be permanently unpublishable. So:
+>
+> - **Not yet published**: `subject`/`grade` are editable, and a change **cascades** to the exam's question rows (`subject`, `grade`, and `topic := subject`). Safe because a `review`/`failed` exam has never had hand-curated topics — every row's `topic` came from the same `meta.subject`.
+> - **Published**: unchanged from v2.0 — the server refuses with a field error. The desync risk is real once an exam is live and attemptable.
+>
+> `saveExam` also now accepts sentinel values on a non-published exam (an incomplete draft is a legitimate state, gated at publish) while still rejecting genuinely out-of-range values, and refuses any write that would leave a **published** exam metadata-incomplete.
+
+### v2.2 Read delta
+
+- `(layer4)/queries.ts` `getMyExam`: no shape change — the metadata columns were already selected for the review screen's summary. The summary merely becomes editable (UI Spec §v2.2).
+- `(layer2)/queries.ts`: **unchanged**. The catalog only ever sees `published` exams, and by the publish gate a published exam always has complete metadata — so no catalog surface has to handle a null required field.
+
+### v2.2 Test strategy delta
+
+| Layer | What | Why it is the right level |
+|---|---|---|
+| `normalizeMeta.test.ts` (pure, new) | Every per-field rule with literal inputs: out-of-range grade/duration/year → `null` **not clamped**; the four semester spellings + a fifth → `null`; `"2024 – 2025"` → `2024`; school preference (TRƯỜNG over SỞ); title composition and filename fallback; typed-beats-extracted precedence; every string truncated to its bound | Pure and total — the whole correctness surface of the AI→DB path lives here and needs no network |
+| `extractMeta.test.ts` (mocked SDK, new) | Mapped payload → `ExtractedMeta`; an all-null payload; a malformed payload → `META_EXTRACTION_FAILED` | Same SDK-boundary mocking convention as the existing extractor tests |
+| `actions` integration | Automatic mode with empty metadata reaches `review`; **`extractMeta` rejecting still yields the full question list** (AC-040); Manual mode still blocks pre-AI (AC-036) | The non-fatal guarantee is a pipeline property, invisible to unit tests |
+| `publishExam` | Refuses with `META_INCOMPLETE` when a required field is null, **called directly** — not via the UI | The gate must hold without the disabled button |
+| Real-file check (QA) | ADR-0007 kill criterion: the 2025 Toán paper + ≥2 school-format term papers; assert `subject`/`grade`/`durationMinutes` correct on a majority and **zero fabricated values** on absent fields | Fabrication is the failure mode that unit tests cannot see |
+| Regression | Manual-mode fixtures and all v2.1 assembly fixtures stay green byte-for-byte | v2.2 must not touch the question path |
+
+### v2.2 AC traceability
+
+| AC | Design element(s) |
+|----|-------------------|
+| AC-034 | `extractMeta` + `normalizeMeta` → `UPDATE exams`; `MetadataFields` on S-03 with the "from your file" marker |
+| AC-035 | nullable-everything contract + prompt null-discipline; `normalizeMeta` degrades out-of-range to `null` rather than clamping |
+| AC-036 | `entryMode === 'manual'` branch keeps `validateExamMeta` before any AI call |
+| AC-037 | file-only validation in the `automatic` branch |
+| AC-038 | `publishExam` metadata precondition + `META_INCOMPLETE` → `ExtractionErrorPanel` → `PublishBar` disabled |
+| AC-039 | `saveExam` re-validation clears the error; publish proceeds |
+| AC-040 | `Promise.all` with a non-fatal `extractMeta` result; provisional filename title; exam still reaches `review` |
+
+### v2.2 Open Items
+
+| ID | Description | Owner | Resolution |
+|----|-------------|-------|-----------|
+| O-7 | Per-field provenance for the "from your file" marker: persisted vs. session-derived. | Eng | **RESOLVED (2026-07-20, product owner): session-derived.** No schema cost. `extractAndAssemble` redirects to `/me/exams/[id]?src=auto` after an Automatic run; S-03 seeds the marker set from the non-empty metadata fields on that first render and clears a field's marker as soon as the author edits it. A reload drops `?src=auto` and so drops the markers — intended: the marker answers "what did the AI just fill in", not "where did this value come from historically". |
+| O-8 | Whether `Automatic` should also read metadata from the **answer** file when the question file's header is unreadable. | Product + Eng | Out of scope for v2.2; the fallback is the author typing six fields. Revisit if the pilot shows unreadable question headers are common. |
+| O-9 | Whether `subject` should be normalized to a controlled vocabulary rather than stored as printed. | Product | **RESOLVED (2026-07-20, product owner): normalize.** `lib/ugc/subjects.ts` defines the canonical `SUBJECTS` list + a diacritic-folding alias map; `normalizeMeta` maps the printed subject through it (no match → sentinel, never a guess), and the S-01/S-03 field becomes a `<select>`. Keeps the catalog subject facet from fragmenting now that a model writes this field. Canonical values match the existing seeded English names. |
+| O-10 | Existing published exams have free-text `subject` values that may fall outside `SUBJECTS` (seeded rows use `Math`/`Physics`/`Chemistry`, which are in the list — but any hand-entered UGC subject may not be). | Eng | Not blocking: the `<select>` only constrains *new* writes, and reads are unaffected. If an out-of-vocabulary value is ever found on a published exam, add it to `SUBJECTS` rather than rewriting data. |
+
 ## Update History
 
 | Date | Version | Changes | Author |
@@ -885,4 +1086,5 @@ Join key changes from `number` to the composite string `` `${part}:${number}` ``
 | 2026-07-14 | 1.0 | Initial Design Doc from PRD v1.1 (paste + admin) | Design Doc agent (Claude Opus 4.8) |
 | 2026-07-14 | 1.1 | Reviewer conditions (compensating-delete policy, recovery narrative, RLS cases) | Design Doc reviewer (Claude Opus 4.8) |
 | 2026-07-15 | 2.0 | **Major redesign to PRD v2.0**: two-file upload + server-side AI extraction (question file + answer file) + pure-code assembly (join by number, answer-file authority, topic=subject) + image crop/Storage + author review; removed `is_admin`/cap trigger/role trigger/transition-admin logic and the parser; added `question_type`/`image_url`/`essay_answer`, `exam-images`/`exam-uploads` buckets + RLS, `QuestionFigure` origin allowlist; simplified lifecycle; delete replaces withdraw; reports read out-of-band | Claude (Opus 4.8) |
+| 2026-07-20 | 2.2 | **§v2.2 Amendment**: AI metadata intake (ADR-0007) — new `extractMeta` (cheap model, question-file page 1, all fields nullable, non-fatal) running parallel to the existing extractors; new pure `normalizeMeta` as the sole AI→DB path (out-of-range degrades to `null`, never clamped; author-typed beats extracted); Entry Mode becomes server-meaningful; **the metadata validity gate moves from `extractAndAssemble` to `publishExam`**; three new `META_*` error codes reusing the existing error-panel machinery. No schema change | Claude (Opus 4.8) |
 | 2026-07-17 | 2.1 | **§v2.1 Amendment**: multi-part national 2025 format (ADR-0005 — `part_number`, composite join key, `true_false`/`short_answer` types, `sub_answers` server-only, `exams.parts`); Gemini provider + native `box2d` 0–1000 bbox protocol (ADR-0006); new types stored/displayed, not auto-scored (product decision) | Claude (Fable 5) |

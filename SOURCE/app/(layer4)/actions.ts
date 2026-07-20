@@ -1,14 +1,19 @@
-// Logic Layer 4 — UGC Exam Upload v2.0: Server Actions (Task 4.1).
+// Logic Layer 4 — UGC Exam Upload v2.2: Server Actions (Task 4.1 + M4/M5).
 // Design Doc §Data Contracts — extractAndAssemble / saveExam / publishExam /
 // deleteExam / reportExam.
 //
 // Nguyên tắc:
-//   - Validate metadata + file TRƯỚC mọi lời gọi AI (AC-003/005/006).
+//   - Validate FILE trước mọi lời gọi AI (AC-005/006 — guard chi phí, luôn).
+//     Metadata: chế độ Manual validate trước AI như v2.1 (AC-036); chế độ
+//     Automatic KHÔNG có metadata lúc submit — gate chuyển sang PUBLISH
+//     (ADR-0007, AC-037/038). Nút disable chỉ là UX; publishExam tự từ chối.
 //   - Chỉ persist KẾT QUẢ ASSEMBLE (ADR-0004) — raw AI output không bao giờ
-//     vào DB; đáp án đến từ FILE ĐÁP ÁN của tác giả.
+//     vào DB; đáp án đến từ FILE ĐÁP ÁN; metadata AI đi qua normalizeMeta
+//     (ranh giới thuần duy nhất, typed thắng extracted, không clamp).
+//   - extractMeta NON-FATAL (AC-040): fail → sentinel + tác giả điền ở review.
 //   - Mọi quyền được RLS cưỡng chế (author-only) — action chỉ là lớp UX.
-//   - Đề published phải LUÔN sạch: publishExam validate; saveExam trên đề
-//     published validate TRƯỚC khi ghi.
+//   - Đề published phải LUÔN sạch: publishExam validate (câu hỏi + metadata);
+//     saveExam trên đề published validate TRƯỚC khi ghi.
 //   - KHÔNG BAO GIỜ log token hay raw AI payload.
 "use server";
 
@@ -19,14 +24,24 @@ import { assembleExamLenient, validateAssembledExam } from "@/lib/ugc/assembleEx
 import { cropImagesLenient } from "@/lib/ugc/cropImages";
 import { makeUgcError } from "@/lib/ugc/errorCopy";
 import { extractAnswers } from "@/lib/ugc/extractAnswers";
+import { extractMeta } from "@/lib/ugc/extractMeta";
 import { extractQuestions } from "@/lib/ugc/extractQuestions";
 import type { FileRef } from "@/lib/ugc/fileRef";
 import { assembledFromRows, questionIdentityFromId } from "@/lib/ugc/fromRows";
 import { ANSWER_MODEL, QUESTION_MODEL } from "@/lib/ugc/gemini";
 import { LIMITS } from "@/lib/ugc/limits";
+import {
+  normalizeMeta,
+  validateMetaForPublish,
+  type TypedMeta,
+} from "@/lib/ugc/normalizeMeta";
 import { getPdfPageCount } from "@/lib/ugc/pdf";
 import { createPipelineLogger } from "@/lib/ugc/pipelineLog";
+import { isSubject } from "@/lib/ugc/subjects";
 import type {
+  EntryMode,
+  ExamMeta,
+  ExtractedMeta,
   SaveExamPatch,
   UgcActionFailure,
   UgcError,
@@ -99,9 +114,52 @@ async function toFileRef(
 }
 
 /**
+ * Chế độ Automatic (v2.2): parse LỎNG giá trị tác giả đã gõ — chỉ nhận giá trị
+ * HỢP LỆ vào TypedMeta (giá trị gõ thắng AI trong normalizeMeta); giá trị gõ
+ * không hợp lệ bị coi như vắng mặt (AI điền hoặc sentinel → tác giả sửa ở
+ * review — nhất quán nguyên tắc không-clamp: không chế biến input hỏng thành
+ * giá trị "hợp lý sai").
+ */
+function parseTypedMeta(formData: FormData): TypedMeta {
+  const s = (k: string) => ((formData.get(k) as string | null) ?? "").trim();
+  const int = (k: string) => {
+    const v = s(k);
+    return /^\d+$/.test(v) ? Number.parseInt(v, 10) : undefined;
+  };
+  const typed: TypedMeta = {};
+
+  const title = s("title");
+  if (title !== "") typed.title = title.slice(0, LIMITS.MAX_TITLE);
+
+  const subject = s("subject");
+  if (subject !== "" && isSubject(subject)) typed.subject = subject;
+
+  const grade = int("grade");
+  if (grade !== undefined && grade >= LIMITS.MIN_GRADE && grade <= LIMITS.MAX_GRADE)
+    typed.grade = grade;
+
+  const duration = int("durationMinutes");
+  if (duration !== undefined && duration >= LIMITS.MIN_DURATION && duration <= LIMITS.MAX_DURATION)
+    typed.durationMinutes = duration;
+
+  const school = s("school");
+  if (school !== "") typed.school = school.slice(0, LIMITS.MAX_SCHOOL);
+
+  const year = int("schoolYear");
+  if (year !== undefined && year >= LIMITS.MIN_YEAR && year <= LIMITS.MAX_YEAR)
+    typed.schoolYear = year;
+
+  const semester = s("semester");
+  if (semester === "HK1" || semester === "HK2") typed.semester = semester;
+
+  return typed;
+}
+
+/**
  * S-01 → upload 2 file + AI extract + assemble + persist (Design Doc §Data Flow).
- * FormData: title, subject, grade, durationMinutes, school?, schoolYear?,
- * semester?, questionFile, answerFile, examId? (re-run từ đề failed của mình).
+ * FormData: entryMode (automatic|manual — v2.2), title, subject, grade,
+ * durationMinutes, school?, schoolYear?, semester?, questionFile, answerFile,
+ * examId? (re-run từ đề failed của mình).
  * Thành công (kể cả assembly còn lỗi cần sửa) → redirect /me/exams/[id];
  * thất bại trước đó → trả UgcActionFailure, KHÔNG mất dữ liệu form.
  */
@@ -109,31 +167,49 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
   const { supabase, user } = await requireUser();
   const log = createPipelineLogger();
   const isRerun = !!(formData.get("examId") as string | null)?.trim();
+  // Thiếu entryMode (client cũ) → manual: giữ nguyên hành vi v2.1.
+  const entryMode: EntryMode =
+    (formData.get("entryMode") as string | null) === "automatic" ? "automatic" : "manual";
   console.log(
-    `[ugc-pipeline] ▶ START extractAndAssemble user=${user.id.slice(0, 8)} ${
+    `[ugc-pipeline] ▶ START extractAndAssemble user=${user.id.slice(0, 8)} mode=${entryMode} ${
       isRerun ? "(re-run)" : "(mới)"
     }`
   );
 
-  // --- 1. Metadata — reject trước mọi lời gọi AI (AC-003). ----------------
+  // --- 1. Metadata. Manual: reject trước mọi lời gọi AI (AC-036, v2.1).
+  //        Automatic: KHÔNG chặn (AC-037) — giá trị gõ (nếu có) parse lỏng,
+  //        phần còn lại AI điền ở stage 5; gate chuyển sang publish (ADR-0007).
   let stageT = log.now();
-  log.stage(1, "Kiểm tra metadata (tên đề, môn, khối, thời lượng)");
-  const { meta, fieldErrors } = validateExamMeta({
-    title: formData.get("title") as string | null,
-    subject: formData.get("subject") as string | null,
-    grade: formData.get("grade") as string | null,
-    durationMinutes: formData.get("durationMinutes") as string | null,
-    school: formData.get("school") as string | null,
-    schoolYear: formData.get("schoolYear") as string | null,
-    semester: formData.get("semester") as string | null,
-  });
-  if (!meta) {
-    log.fail(1, "metadata", "field không hợp lệ", stageT);
-    return failure("validation", "Please fix the highlighted fields.", {
-      fieldErrors: fieldErrors as Record<string, string>,
+  const questionFileName = (formData.get("questionFile") as File | null)?.name ?? "exam";
+  let meta: ExamMeta;
+  let typed: TypedMeta = {};
+  if (entryMode === "manual") {
+    log.stage(1, "Kiểm tra metadata (tên đề, môn, khối, thời lượng)");
+    const validated = validateExamMeta({
+      title: formData.get("title") as string | null,
+      subject: formData.get("subject") as string | null,
+      grade: formData.get("grade") as string | null,
+      durationMinutes: formData.get("durationMinutes") as string | null,
+      school: formData.get("school") as string | null,
+      schoolYear: formData.get("schoolYear") as string | null,
+      semester: formData.get("semester") as string | null,
     });
+    if (!validated.meta) {
+      log.fail(1, "metadata", "field không hợp lệ", stageT);
+      return failure("validation", "Please fix the highlighted fields.", {
+        fieldErrors: validated.fieldErrors as Record<string, string>,
+      });
+    }
+    meta = validated.meta;
+    log.ok(1, "metadata", `"${meta.title}" · ${meta.subject} · khối ${meta.grade}`, stageT);
+  } else {
+    log.stage(1, "Metadata: chế độ Automatic — AI sẽ đọc từ trang 1 file đề");
+    typed = parseTypedMeta(formData);
+    // Meta TẠM (sentinel cho field thiếu) để insert row processing; giá trị
+    // cuối cùng chốt sau extractMeta (stage 5 → 8).
+    meta = normalizeMeta(null, typed, questionFileName);
+    log.ok(1, "metadata", `tác giả gõ trước ${Object.keys(typed).length} field`, stageT);
   }
-  log.ok(1, "metadata", `"${meta.title}" · ${meta.subject} · khối ${meta.grade}`, stageT);
 
   // --- 2. Hai file bắt buộc (AC-005) + loại/kích thước/số trang (AC-006). --
   stageT = log.now();
@@ -171,7 +247,7 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
   if (rerunExamId) {
     const { data: own } = await supabase
       .from("exams")
-      .select("id, subject, grade, question_ids")
+      .select("id, title, subject, grade, duration_minutes, school, school_year, semester, question_ids")
       .eq("id", rerunExamId)
       .eq("author_id", user.id)
       .maybeSingle();
@@ -180,10 +256,33 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
       return failure("server", "Exam not found or you are not its author.");
     }
     examId = own.id as string;
-    // subject/grade cố định sau khi tạo (đổi subject lệch topic toàn đề) —
-    // re-run dùng giá trị đã có, bỏ qua giá trị form.
-    meta.subject = own.subject as string;
-    meta.grade = own.grade as number;
+    // Re-run giữ subject/grade đã có (đổi subject lệch topic toàn đề) — trừ
+    // khi row còn sentinel (tạo ở Automatic mà AI chưa đọc được, v2.2): khi
+    // đó để giá trị form/AI điền tiếp.
+    if ((own.subject as string) !== "") meta.subject = own.subject as string;
+    if ((own.grade as number) !== 0) meta.grade = own.grade as number;
+    if (entryMode === "automatic") {
+      // Metadata đã có trên row coi như "typed" cho lần chạy này — extractMeta
+      // fail thì giá trị cũ không bị sentinel đè mất (AC-040 không mất dữ liệu).
+      typed = {
+        ...typed,
+        ...(typed.title === undefined && { title: own.title as string }),
+        ...(typed.subject === undefined &&
+          (own.subject as string) !== "" && { subject: own.subject as string }),
+        ...(typed.grade === undefined && (own.grade as number) !== 0 && { grade: own.grade as number }),
+        ...(typed.durationMinutes === undefined &&
+          (own.duration_minutes as number) !== 0 && {
+            durationMinutes: own.duration_minutes as number,
+          }),
+        ...(typed.school === undefined &&
+          own.school != null && { school: own.school as string }),
+        ...(typed.schoolYear === undefined &&
+          own.school_year != null && { schoolYear: own.school_year as number }),
+        ...(typed.semester === undefined &&
+          own.semester != null && { semester: own.semester as "HK1" | "HK2" }),
+      };
+      meta = normalizeMeta(null, typed, questionFileName);
+    }
     // Re-derive toàn phần (I004): xoá câu hỏi cũ, reset danh sách.
     const oldIds = (own.question_ids as string[]) ?? [];
     if (oldIds.length > 0) {
@@ -291,14 +390,16 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
   }
   log.ok(4, "upload", "2 file gốc đã lưu", stageT);
 
-  // --- 5. AI extraction (server-only, 2 call song song). -------------------
+  // --- 5. AI extraction (server-only, song song — v2.2 thêm call metadata
+  //        NON-FATAL ở chế độ Automatic; không thêm độ trễ wall-clock). -------
   stageT = log.now();
+  const metaCall = entryMode === "automatic";
   log.stage(
     5,
-    "Trích xuất bằng AI (2 call song song)",
-    `đề: ${QUESTION_MODEL} · đáp án: ${ANSWER_MODEL}`
+    `Trích xuất bằng AI (${metaCall ? 3 : 2} call song song)`,
+    `đề: ${QUESTION_MODEL} · đáp án: ${ANSWER_MODEL}${metaCall ? ` · metadata: ${ANSWER_MODEL} (trang 1)` : ""}`
   );
-  const [qResult, aResult] = await Promise.all([
+  const [qResult, aResult, mResult] = await Promise.all([
     (async () => {
       const t = log.now();
       const r = await extractQuestions(qRef);
@@ -319,14 +420,33 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
       else log.fail(5, "extractAnswers (đáp án)", r.errors[0]?.code ?? "?", t);
       return r;
     })(),
+    (async () => {
+      if (!metaCall) return null;
+      const t = log.now();
+      const r = await extractMeta(qRef);
+      if (r.ok) {
+        const found = Object.values(r.value).filter((v) => v !== null).length;
+        log.ok(5, "extractMeta (thông tin đề)", `đọc được ${found}/7 field`, t);
+      } else {
+        // NON-FATAL (AC-040): sentinel + tác giả điền ở review.
+        log.fail(5, "extractMeta (thông tin đề)", `${r.errors[0]?.code ?? "?"} — đi tiếp, tác giả điền ở review`, t);
+      }
+      return r;
+    })(),
   ]);
   if (!qResult.ok || !aResult.ok) {
-    log.fail(5, "AI extraction", "một trong hai call thất bại → rollback", stageT);
+    log.fail(5, "AI extraction", "call đề/đáp án thất bại → rollback", stageT);
     await compensate();
     const errors = [...(qResult.ok ? [] : qResult.errors), ...(aResult.ok ? [] : aResult.errors)];
     return failure("extraction", errors[0]?.message ?? "Extraction failed.", {
       errors,
     });
+  }
+  // Chốt metadata cuối cùng (Automatic): AI đề xuất → normalizeMeta quyết
+  // định (typed thắng, không clamp, không fabricate) — ghi DB ở stage 8.
+  if (entryMode === "automatic") {
+    const extracted: ExtractedMeta | null = mResult?.ok ? mResult.value : null;
+    meta = normalizeMeta(extracted, typed, questionFileName);
   }
   const { parts, questions: extractedQuestions } = qResult.value;
   // Nhãn lỗi "Phần P Câu N" chỉ với đề nhiều phần (ADR-0005).
@@ -387,6 +507,16 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
       question_file_path: questionPath,
       answer_file_path: answerPath,
       parts: exam.parts.length > 0 ? exam.parts : null,
+      // v2.2 (Automatic): chốt metadata sau normalizeMeta — row insert ở stage
+      // 3 mới chỉ mang giá trị tạm/sentinel. Manual: ghi lại chính giá trị cũ
+      // (no-op về nội dung).
+      title: meta.title,
+      subject: meta.subject,
+      grade: meta.grade,
+      duration_minutes: meta.durationMinutes,
+      school: meta.school ?? null,
+      school_year: meta.schoolYear ?? null,
+      semester: meta.semester ?? null,
     })
     .eq("id", examId);
   if (idsErr) {
@@ -436,7 +566,10 @@ export async function extractAndAssemble(formData: FormData): Promise<UgcActionF
   );
 
   revalidatePath("/me/exams");
-  redirect(`/me/exams/${examId}`);
+  // ?src=auto: đánh dấu phiên đến từ Automatic — S-03 hiện marker "from your
+  // file" trên field AI điền (session-derived, O-7/TBD-07; reload mất marker
+  // là chủ đích).
+  redirect(`/me/exams/${examId}${entryMode === "automatic" ? "?src=auto" : ""}`);
 }
 
 /**
@@ -462,32 +595,106 @@ export async function saveExam(
     return failure("server", "Exam not found or you are not its author.");
   }
 
-  // Validate metadata patch (chỉ các field cho phép sửa).
+  // --- Validate metadata patch (v2.2, ADR-0007) --------------------------
+  // Đề CHƯA publish: sentinel (""/0) được phép — "còn thiếu" là trạng thái
+  // hợp lệ của draft, gate chặn ở publish. Giá trị CÓ THẬT thì phải hợp lệ
+  // (author-typed → feedback ngay). subject/grade sửa được khi chưa publish
+  // (cascade topic/subject/grade xuống questions); sau publish: cố định.
+  const isPublishedExam = examRow.status === "published";
+  const metaFieldErrors: Record<string, string> = {};
+  const nextMeta: ExamMeta = {
+    title: examRow.title as string,
+    subject: examRow.subject as string,
+    grade: examRow.grade as number,
+    durationMinutes: examRow.duration_minutes as number,
+    school: (examRow.school as string | null) ?? undefined,
+    schoolYear: (examRow.school_year as number | null) ?? undefined,
+    semester: ((examRow.semester as string | null) ?? undefined) as "HK1" | "HK2" | undefined,
+  };
   if (patch.meta) {
-    const merged = validateExamMeta({
-      title: patch.meta.title ?? (examRow.title as string),
-      subject: examRow.subject as string,
-      grade: String(examRow.grade),
-      durationMinutes: String(patch.meta.durationMinutes ?? examRow.duration_minutes),
-      school:
-        patch.meta.school !== undefined
-          ? (patch.meta.school ?? "")
-          : ((examRow.school as string | null) ?? ""),
-      schoolYear:
-        patch.meta.schoolYear !== undefined
-          ? String(patch.meta.schoolYear ?? "")
-          : examRow.school_year != null
-            ? String(examRow.school_year)
-            : "",
-      semester:
-        patch.meta.semester !== undefined
-          ? (patch.meta.semester ?? "")
-          : ((examRow.semester as string | null) ?? ""),
-    });
-    if (!merged.meta) {
+    const m = patch.meta;
+    if (m.title !== undefined) {
+      const t = m.title.trim();
+      if (t.length > LIMITS.MAX_TITLE) {
+        metaFieldErrors.title = `Title must be at most ${LIMITS.MAX_TITLE} characters.`;
+      } else {
+        nextMeta.title = t; // rỗng cho phép trên draft; gate publish chặn
+      }
+    }
+    if (m.subject !== undefined && m.subject !== nextMeta.subject) {
+      if (isPublishedExam) {
+        metaFieldErrors.subject = "Subject is fixed after publishing.";
+      } else if (m.subject !== "" && !isSubject(m.subject)) {
+        metaFieldErrors.subject = "Pick a subject from the list.";
+      } else {
+        nextMeta.subject = m.subject;
+      }
+    }
+    if (m.grade !== undefined && m.grade !== nextMeta.grade) {
+      if (isPublishedExam) {
+        metaFieldErrors.grade = "Grade is fixed after publishing.";
+      } else if (
+        m.grade !== 0 &&
+        (!Number.isInteger(m.grade) || m.grade < LIMITS.MIN_GRADE || m.grade > LIMITS.MAX_GRADE)
+      ) {
+        metaFieldErrors.grade = `Grade must be between ${LIMITS.MIN_GRADE} and ${LIMITS.MAX_GRADE}.`;
+      } else {
+        nextMeta.grade = m.grade;
+      }
+    }
+    if (m.durationMinutes !== undefined) {
+      if (
+        m.durationMinutes !== 0 &&
+        (!Number.isInteger(m.durationMinutes) ||
+          m.durationMinutes < LIMITS.MIN_DURATION ||
+          m.durationMinutes > LIMITS.MAX_DURATION)
+      ) {
+        metaFieldErrors.durationMinutes = `Duration must be between ${LIMITS.MIN_DURATION} and ${LIMITS.MAX_DURATION} minutes.`;
+      } else {
+        nextMeta.durationMinutes = m.durationMinutes;
+      }
+    }
+    if (m.school !== undefined) {
+      const s = (m.school ?? "").trim();
+      if (s.length > LIMITS.MAX_SCHOOL) {
+        metaFieldErrors.school = `School must be at most ${LIMITS.MAX_SCHOOL} characters.`;
+      } else {
+        nextMeta.school = s === "" ? undefined : s;
+      }
+    }
+    if (m.schoolYear !== undefined) {
+      if (
+        m.schoolYear !== null &&
+        (!Number.isInteger(m.schoolYear) ||
+          m.schoolYear < LIMITS.MIN_YEAR ||
+          m.schoolYear > LIMITS.MAX_YEAR)
+      ) {
+        metaFieldErrors.schoolYear = `Year must be between ${LIMITS.MIN_YEAR} and ${LIMITS.MAX_YEAR}.`;
+      } else {
+        nextMeta.schoolYear = m.schoolYear ?? undefined;
+      }
+    }
+    if (m.semester !== undefined) {
+      if (m.semester !== null && m.semester !== "HK1" && m.semester !== "HK2") {
+        metaFieldErrors.semester = "Semester must be HK1 or HK2.";
+      } else {
+        nextMeta.semester = m.semester ?? undefined;
+      }
+    }
+    if (Object.keys(metaFieldErrors).length > 0) {
       return failure("validation", "Please fix the highlighted fields.", {
-        fieldErrors: merged.fieldErrors as Record<string, string>,
+        fieldErrors: metaFieldErrors,
       });
+    }
+    // Đề published không được ghi về trạng thái thiếu metadata (gate giữ chặt
+    // bất kể client): sentinel/thiếu → từ chối với lỗi META_* rõ ràng.
+    if (isPublishedExam) {
+      const metaErrors = validateMetaForPublish(nextMeta);
+      if (metaErrors.length > 0) {
+        return failure("validation", "A published exam must keep complete details.", {
+          errors: metaErrors,
+        });
+      }
     }
   }
 
@@ -531,13 +738,13 @@ export async function saveExam(
 
   const assembled = assembledFromRows(
     {
-      title: patch.meta?.title ?? (examRow.title as string),
-      subject: examRow.subject as string,
-      grade: examRow.grade as number,
-      duration_minutes: patch.meta?.durationMinutes ?? (examRow.duration_minutes as number),
-      school: examRow.school as string | null,
-      school_year: examRow.school_year as number | null,
-      semester: examRow.semester as string | null,
+      title: nextMeta.title,
+      subject: nextMeta.subject,
+      grade: nextMeta.grade,
+      duration_minutes: nextMeta.durationMinutes,
+      school: nextMeta.school ?? null,
+      school_year: nextMeta.schoolYear ?? null,
+      semester: nextMeta.semester ?? null,
       question_ids: questionIds,
       parts: (examRow.parts as { number: number; title: string }[] | null) ?? null,
     },
@@ -552,29 +759,41 @@ export async function saveExam(
     });
   }
 
-  // Ghi metadata.
+  // Ghi metadata (giá trị đã validate trong nextMeta).
   if (patch.meta) {
     const { error } = await supabase
       .from("exams")
       .update({
-        ...(patch.meta.title !== undefined && { title: patch.meta.title }),
-        ...(patch.meta.durationMinutes !== undefined && {
-          duration_minutes: patch.meta.durationMinutes,
-        }),
-        ...(patch.meta.school !== undefined && {
-          school: patch.meta.school ?? null,
-        }),
-        ...(patch.meta.schoolYear !== undefined && {
-          school_year: patch.meta.schoolYear ?? null,
-        }),
-        ...(patch.meta.semester !== undefined && {
-          semester: patch.meta.semester ?? null,
-        }),
+        title: nextMeta.title,
+        subject: nextMeta.subject,
+        grade: nextMeta.grade,
+        duration_minutes: nextMeta.durationMinutes,
+        school: nextMeta.school ?? null,
+        school_year: nextMeta.schoolYear ?? null,
+        semester: nextMeta.semester ?? null,
       })
       .eq("id", examId);
     if (error) {
       console.error("[saveExam] update exam:", error.message);
       return failure("server", "Could not save. Try again.");
+    }
+    // v2.2: đổi subject/grade (chỉ xảy ra khi chưa publish) cascade xuống
+    // questions — topic := subject (ADR-0004 mặc định; đề ở review chưa từng
+    // có topic tự biên tập nên ghi đè toàn bộ là an toàn).
+    const subjectChanged = nextMeta.subject !== (examRow.subject as string);
+    const gradeChanged = nextMeta.grade !== (examRow.grade as number);
+    if ((subjectChanged || gradeChanged) && questionIds.length > 0) {
+      const { error: cascadeErr } = await supabase
+        .from("questions")
+        .update({
+          ...(subjectChanged && { subject: nextMeta.subject, topic: nextMeta.subject }),
+          ...(gradeChanged && { grade: nextMeta.grade }),
+        })
+        .in("id", questionIds);
+      if (cascadeErr) {
+        console.error("[saveExam] cascade subject/grade:", cascadeErr.message);
+        return failure("server", "Could not save. Try again.");
+      }
     }
   }
 
@@ -621,7 +840,9 @@ export async function saveExam(
   return {};
 }
 
-/** Publish (AC-016/017): đề của mình + status review/draft + validate SẠCH. */
+/** Publish (AC-016/017 + v2.2 AC-038): đề của mình + status review/draft +
+ * validate SẠCH cả câu hỏi LẪN metadata (ADR-0007 — gate metadata nằm Ở ĐÂY,
+ * không phải ở upload; server tự từ chối bất kể nút client có disable hay không). */
 export async function publishExam(examId: string): Promise<{ error?: UgcActionFailure["error"] }> {
   const { supabase, user } = await requireUser();
 
@@ -667,7 +888,9 @@ export async function publishExam(examId: string): Promise<{ error?: UgcActionFa
     },
     qRows ?? []
   );
-  const errors = validateAssembledExam(assembled);
+  // v2.2 (AC-038): metadata sentinel/ngoài khoảng chặn publish — sort TRƯỚC
+  // lỗi từng câu (gate toàn đề).
+  const errors = [...validateMetaForPublish(assembled.meta), ...validateAssembledExam(assembled)];
   if (errors.length > 0) {
     return failure("validation", "Fix these issues before publishing:", {
       errors,

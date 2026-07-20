@@ -13,7 +13,14 @@
 
 import { makeUgcError } from "./errorCopy";
 import { LIMITS } from "./limits";
-import { getGeminiClient, QUESTION_MODEL } from "./gemini";
+import {
+  FATAL_CALL_DEADLINE_MS,
+  getGeminiClient,
+  logExtractorExit,
+  makeDeadlineSignal,
+  QUESTION_MODEL,
+  sdkErrorDetail,
+} from "./gemini";
 import type {
   BoundingBox,
   ChoiceId,
@@ -248,12 +255,15 @@ export function mapQuestionsPayload(payload: unknown): ExtractedQuestionFile | n
 export async function extractQuestions(
   file: FileRef,
 ): Promise<Result<ExtractedQuestionFile>> {
+  const startedAt = Date.now();
+  const deadline = makeDeadlineSignal(FATAL_CALL_DEADLINE_MS);
   try {
     const client = getGeminiClient();
     const response = await client.models.generateContent({
       model: QUESTION_MODEL,
       contents: [toGeminiPart(file), { text: PROMPT }],
       config: {
+        abortSignal: deadline.signal,
         maxOutputTokens: 65536,
         responseMimeType: "application/json",
         responseJsonSchema: QUESTIONS_SCHEMA as unknown as Record<string, unknown>,
@@ -262,16 +272,36 @@ export async function extractQuestions(
 
     const finishReason = response.candidates?.[0]?.finishReason;
     if (finishReason !== "STOP") {
+      logExtractorExit("extractQuestions:finishReason", {
+        finishReason,
+        safetyRatings: response.candidates?.[0]?.safetyRatings,
+        blockReason: response.promptFeedback?.blockReason,
+        usage: response.usageMetadata,
+        elapsedMs: Date.now() - startedAt,
+      });
       return {
         ok: false,
         errors: [makeUgcError("EXTRACTION_FAILED", null)],
       };
     }
     const text = response.text;
-    if (!text) return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
+    if (!text) {
+      logExtractorExit("extractQuestions:emptyText", {
+        finishReason,
+        blockReason: response.promptFeedback?.blockReason,
+        usage: response.usageMetadata,
+        elapsedMs: Date.now() - startedAt,
+      });
+      return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
+    }
 
     const parsed = mapQuestionsPayload(JSON.parse(text));
     if (!parsed) {
+      logExtractorExit("extractQuestions:mapNull", {
+        textLength: text.length,
+        textPrefix: text.slice(0, 200),
+        elapsedMs: Date.now() - startedAt,
+      });
       return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
     }
     if (parsed.questions.length === 0) {
@@ -281,8 +311,16 @@ export async function extractQuestions(
       return { ok: false, errors: [makeUgcError("TOO_MANY_QUESTIONS", null)] };
     }
     return { ok: true, value: parsed };
-  } catch {
-    // Lỗi API/mạng/key — không log payload; message user-safe qua errorCopy.
+  } catch (err) {
+    // Lỗi API/mạng/key/deadline — log chẩn đoán SERVER-SIDE (không log payload),
+    // message user-safe vẫn generic qua errorCopy. AbortError = quá deadline.
+    const isAbort = (err as { name?: string })?.name === "AbortError";
+    logExtractorExit(isAbort ? "extractQuestions:deadline" : "extractQuestions:catch", {
+      ...sdkErrorDetail(err),
+      elapsedMs: Date.now() - startedAt,
+    });
     return { ok: false, errors: [makeUgcError("EXTRACTION_FAILED", null)] };
+  } finally {
+    deadline.clear();
   }
 }

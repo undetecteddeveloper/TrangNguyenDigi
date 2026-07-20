@@ -78,7 +78,11 @@ export type UgcErrorCode =
   | "ESSAY_ANSWER_TOO_LONG"
   // v2.1 (ADR-0005):
   | "WRONG_SUB_ITEM_COUNT"
-  | "SHORT_ANSWER_TOO_LONG";
+  | "SHORT_ANSWER_TOO_LONG"
+  // v2.2 (ADR-0007) — metadata gate ở publish, không phải upload:
+  | "META_INCOMPLETE"
+  | "META_INVALID"
+  | "META_EXTRACTION_FAILED";
 
 /** Lỗi typed cho ExtractionErrorPanel — message đã bake sẵn từ errorCopy. */
 export type UgcError = {
@@ -89,11 +93,18 @@ export type UgcError = {
    * ghi "Câu N", không có "Phần P"). */
   partNumber: number | null;
   message: string;
+  /** v2.2 (ADR-0007): lỗi META_* trỏ vào field metadata thay vì câu hỏi —
+   * ErrorPanel link tới khối metadata, không tới card câu. */
+  field?: MetaFieldName;
 };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; errors: UgcError[] };
 
-/** Metadata đề do tác giả nhập ở S-01. */
+/** Metadata đề do tác giả nhập ở S-01.
+ * v2.2 (ADR-0007): ở chế độ Automatic các field required có thể mang GIÁ TRỊ
+ * SENTINEL khi AI không đọc được ("" cho subject, 0 cho grade/durationMinutes
+ * — cột DB NOT NULL nên không dùng null). Sentinel bị chặn ở publish gate
+ * (validateMetaForPublish), không bao giờ lọt vào catalog. */
 export type ExamMeta = {
   title: string;
   subject: string;
@@ -102,6 +113,35 @@ export type ExamMeta = {
   school?: string;
   schoolYear?: number;
   semester?: "HK1" | "HK2";
+};
+
+/** Tên field metadata (khóa lỗi META_* + fieldErrors). */
+export type MetaFieldName =
+  | "title"
+  | "subject"
+  | "grade"
+  | "durationMinutes"
+  | "school"
+  | "schoolYear"
+  | "semester";
+
+/** Chế độ nhập S-01 (v2.2 — server-meaningful, không còn thuần UI):
+ * automatic = AI điền metadata từ file đề, gate ở publish;
+ * manual = tác giả nhập, validate trước mọi AI call (hành vi v2.1). */
+export type EntryMode = "automatic" | "manual";
+
+/** Metadata thô do AI đọc từ TRANG 1 file đề (ADR-0007). MỌI field nullable —
+ * null nghĩa là "không in trên trang", model bị CẤM suy đoán. schoolYear/
+ * semester giữ NGUYÊN VĂN chuỗi in trên đề ("2024 – 2025", "HỌC KÌ I") —
+ * parse là việc của normalizeMeta (code thuần), không phải của model. */
+export type ExtractedMeta = {
+  title: string | null;
+  subject: string | null;
+  grade: number | null;
+  durationMinutes: number | null;
+  school: string | null;
+  schoolYear: string | null;
+  semester: string | null;
 };
 
 /** Câu hỏi sau assembly — giá trị DUY NHẤT được persist (ADR-0004).
@@ -140,11 +180,16 @@ export type AssembledExam = {
 // Server Actions (Task 4.1) — shape input/output dùng chung client ↔ server.
 // ---------------------------------------------------------------------------
 
-/** Patch metadata khi tác giả sửa đề (S-03). subject/grade cố định sau khi
- * tạo — đổi subject sẽ lệch topic của toàn bộ câu hỏi (ADR-0004). Field optional
- * nhận null = xoá giá trị (school/schoolYear/semester). */
+/** Patch metadata khi tác giả sửa đề (S-03). Field optional nhận null = xoá
+ * giá trị (school/schoolYear/semester).
+ * v2.2 (ADR-0007): subject/grade sửa được KHI CHƯA PUBLISH (AI có thể không
+ * đọc được → tác giả phải điền ở review); đổi subject cascade topic := subject
+ * cho toàn bộ câu hỏi (ADR-0004 topic mặc định). Sau publish: cố định như
+ * v2.0 — server từ chối. */
 export type SaveExamMetaPatch = {
   title?: string;
+  subject?: string;
+  grade?: number;
   durationMinutes?: number;
   school?: string | null;
   schoolYear?: number | null;

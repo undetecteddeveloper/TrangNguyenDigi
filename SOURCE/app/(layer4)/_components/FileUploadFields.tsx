@@ -1,41 +1,107 @@
 "use client";
 
-// FileUploadFields — 2 picker file (câu hỏi + đáp án) (UI Spec §FileUploadFields
-// / Task 6.2). Hiện chip tên file đã chọn + nút gỡ; hint loại/kích thước/số
-// trang. Controlled bởi UploadForm (giữ selection khi lỗi). Cả 2 file bắt buộc.
+// FileUploadFields — 2 dropzone (câu hỏi + đáp án) (UI Spec §FileUploadFields
+// / Task 6.2). Hiện tên file đã chọn + nút gỡ; hint loại/kích thước/số trang.
+// Controlled bởi UploadForm (giữ selection khi lỗi). Cả 2 file bắt buộc.
+// Restyle theo prototype UI_Layer4_main: viền chấm, glyph "+" idle, crossfade
+// sang text hint/tên file khi hover hoặc đã có file (HIDDEN-FEATURES #6);
+// hỗ trợ drag & drop thật, không chỉ click-to-browse.
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { LIMITS } from "@/lib/ugc/limits";
 
 const MAX_MB = Math.round(LIMITS.MAX_FILE_BYTES / (1024 * 1024));
 const ACCEPT = LIMITS.ALLOWED_MIME.join(",");
 
-interface FilePickerProps {
+interface DropzoneProps {
   id: string;
   label: string;
   hint: string;
   file: File | null;
   onSelect: (file: File | null) => void;
   disabled?: boolean;
+  error?: string;
 }
 
-function FilePicker({ id, label, hint, file, onSelect, disabled }: FilePickerProps) {
+function Dropzone({ id, label, hint, file, onSelect, disabled, error }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [hover, setHover] = useState(false);
+  const showText = !!file || hover || dragOver;
+
+  function openPicker() {
+    if (!disabled) inputRef.current?.click();
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    if (disabled) return;
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) onSelect(dropped);
+  }
+
   return (
     <div>
-      <span className="block text-sm font-medium text-foreground">
+      <span className="eyebrow block">
         {label} <span className="text-brand">*</span>
       </span>
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
 
-      {file ? (
-        <div className="mt-2 flex items-center justify-between gap-3 rounded-[4px] border border-border bg-card px-3 py-2">
-          <span className="min-w-0 truncate text-sm text-foreground">
-            {file.name}
-          </span>
+      <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onClick={openPicker}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openPicker();
+          }
+        }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled) setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        className={[
+          "mt-1.5 grid h-28 cursor-pointer place-items-center rounded-[4px] border border-dashed px-3 text-center transition-colors duration-200",
+          error
+            ? "border-brand"
+            : dragOver || file
+              ? "border-ring"
+              : "border-border hover:border-ring",
+          disabled ? "pointer-events-none opacity-60" : "",
+        ].join(" ")}
+      >
+        <span
+          aria-hidden
+          className={[
+            "col-start-1 row-start-1 text-2xl text-muted-foreground transition-opacity duration-300",
+            showText ? "opacity-0" : "opacity-100",
+          ].join(" ")}
+        >
+          +
+        </span>
+        <span
+          className={[
+            "col-start-1 row-start-1 max-w-full truncate px-2 text-sm text-foreground transition-opacity duration-300",
+            showText ? "opacity-100" : "opacity-0",
+          ].join(" ")}
+        >
+          {file ? file.name : "Drag & drop, or click to upload"}
+        </span>
+      </div>
+
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">{hint}</p>
+        {file && (
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               onSelect(null);
               if (inputRef.current) inputRef.current.value = "";
             }}
@@ -44,15 +110,14 @@ function FilePicker({ id, label, hint, file, onSelect, disabled }: FilePickerPro
           >
             Remove
           </button>
-        </div>
-      ) : (
-        <label
-          htmlFor={id}
-          className="mt-2 flex cursor-pointer items-center justify-center rounded-[4px] border border-dashed border-border px-3 py-4 text-sm text-muted-foreground transition-colors hover:border-brand hover:text-foreground"
-        >
-          Choose a file…
-        </label>
+        )}
+      </div>
+      {error && (
+        <p id={`${id}-error`} className="mt-1 animate-in fade-in text-xs text-brand duration-200">
+          {error}
+        </p>
       )}
+
       <input
         ref={inputRef}
         id={id}
@@ -72,6 +137,8 @@ interface FileUploadFieldsProps {
   onSelectQuestion: (file: File | null) => void;
   onSelectAnswer: (file: File | null) => void;
   disabled?: boolean;
+  questionError?: string;
+  answerError?: string;
 }
 
 export function FileUploadFields({
@@ -80,25 +147,29 @@ export function FileUploadFields({
   onSelectQuestion,
   onSelectAnswer,
   disabled,
+  questionError,
+  answerError,
 }: FileUploadFieldsProps) {
   const hint = `PNG, JPEG, WebP, or PDF · up to ${MAX_MB} MB · PDF up to ${LIMITS.MAX_PDF_PAGES} pages`;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <FilePicker
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <Dropzone
         id="question-file"
-        label="Question file"
+        label="Exam Paper"
         hint={hint}
         file={questionFile}
         onSelect={onSelectQuestion}
         disabled={disabled}
+        error={questionError}
       />
-      <FilePicker
+      <Dropzone
         id="answer-file"
-        label="Answer file"
+        label="Answer Key"
         hint={hint}
         file={answerFile}
         onSelect={onSelectAnswer}
         disabled={disabled}
+        error={answerError}
       />
     </div>
   );

@@ -50,8 +50,11 @@ export function ExamRow({ item }: { item: MyExamListItem }) {
           )}
           <StatusBadge status={item.status} />
         </div>
+        {/* v2.2: subject/grade có thể còn sentinel (""/0 — Automatic, AI chưa
+            đọc được) → hiện "—" thay vì "Grade 0". */}
         <p className="mt-1 text-sm text-muted-foreground">
-          {item.subject} · Grade {item.grade} · {item.questionCount} question
+          {item.subject !== "" ? item.subject : "—"} · Grade{" "}
+          {item.grade !== 0 ? item.grade : "—"} · {item.questionCount} question
           {item.questionCount === 1 ? "" : "s"}
         </p>
       </div>

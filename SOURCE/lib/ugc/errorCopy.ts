@@ -4,7 +4,7 @@
 // truyền partNumber CHỈ với đề nhiều phần (đề 1 phần giữ nguyên "Câu N").
 
 import { LIMITS } from "./limits";
-import type { UgcError, UgcErrorCode } from "./types";
+import type { MetaFieldName, UgcError, UgcErrorCode } from "./types";
 
 /** Tham số tuỳ code — chỉ dùng field liên quan. */
 export type UgcErrorParams = {
@@ -21,6 +21,26 @@ export type UgcErrorParams = {
   answerCount?: number;
   questionCount?: number;
   unmatchedCount?: number;
+  /** META_INCOMPLETE / META_INVALID: field metadata bị lỗi (v2.2, ADR-0007). */
+  field?: MetaFieldName;
+};
+
+/** Nhãn hiển thị của field metadata trong copy lỗi META_*. */
+const META_FIELD_LABELS: Record<MetaFieldName, string> = {
+  title: "the title",
+  subject: "the subject",
+  grade: "the grade",
+  durationMinutes: "the duration",
+  school: "the school",
+  schoolYear: "the school year",
+  semester: "the semester",
+};
+
+/** Khoảng hợp lệ để copy META_INVALID nêu đích danh giới hạn. */
+const META_FIELD_RANGES: Partial<Record<MetaFieldName, string>> = {
+  grade: `${LIMITS.MIN_GRADE}–${LIMITS.MAX_GRADE}`,
+  durationMinutes: `${LIMITS.MIN_DURATION}–${LIMITS.MAX_DURATION} minutes`,
+  schoolYear: `${LIMITS.MIN_YEAR}–${LIMITS.MAX_YEAR}`,
 };
 
 /** Nhãn định danh câu: "Phần 2 Câu 3" (đề nhiều phần) hoặc "Câu 3". */
@@ -67,6 +87,16 @@ function message(
       return `${q} — ${p.subItemCount ?? 0} sub-items were read; a true/false question needs ${LIMITS.MIN_SUB_ITEMS}–${LIMITS.MAX_SUB_ITEMS} items (a–d). Edit below or re-upload.`;
     case "SHORT_ANSWER_TOO_LONG":
       return `${q} — the expected answer is too long (max ${LIMITS.MAX_SHORT_ANSWER} characters).`;
+    // v2.2 (ADR-0007) — lỗi metadata: sort TRÊN lỗi từng câu, link tới khối
+    // metadata (không tới card câu).
+    case "META_INCOMPLETE":
+      return `Exam details — ${p.field ? META_FIELD_LABELS[p.field] : "a required field"} is missing. Add it above before publishing.`;
+    case "META_INVALID": {
+      const range = p.field ? META_FIELD_RANGES[p.field] : undefined;
+      return `Exam details — ${p.field ? META_FIELD_LABELS[p.field] : "a field"} is out of range${range ? ` (${range})` : ""}. Correct it above.`;
+    }
+    case "META_EXTRACTION_FAILED":
+      return "Exam details — we couldn't read the exam details from your file. Fill them in above.";
   }
 }
 
@@ -82,5 +112,6 @@ export function makeUgcError(
     questionNumber,
     partNumber: params.partNumber ?? null,
     message: message(code, questionNumber, params),
+    ...(params.field !== undefined && { field: params.field }),
   };
 }
